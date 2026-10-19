@@ -2,6 +2,7 @@ package stateful
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -1169,4 +1170,47 @@ func TestCustomOperationConsistency_DoesNotMutate(t *testing.T) {
 	_, err := CustomOperationConsistency(op)
 	require.NoError(t, err)
 	assert.Equal(t, ConsistencyMode(""), op.Consistency, "should not mutate op.Consistency")
+}
+
+// Expressions such as fromPairs() yield map[interface{}]interface{}, which
+// encoding/json cannot marshal. Stored values and responses must stay JSON-safe.
+func TestExecutor_ExpressionMapsAreJSONCompatible(t *testing.T) {
+	store, executor := setupExecutorTest(t)
+
+	op := &CustomOperation{
+		Name: "TagAccount",
+		Steps: []Step{
+			{Type: StepRead, Resource: "accounts", ID: "input.id", As: "acct"},
+			{
+				Type:     StepUpdate,
+				Resource: "accounts",
+				ID:       "input.id",
+				Set: map[string]string{
+					"meta":  `fromPairs([["tier", "gold"], ["flags", [fromPairs([["vip", true]])]]])`,
+					"owner": `fromPairs(filter(toPairs(acct), {#[0] == "name"}))`,
+				},
+			},
+		},
+		Response: map[string]string{"meta": `fromPairs([["tier", "gold"]])`},
+	}
+
+	result := executor.Execute(context.Background(), op, &OperationRequest{Data: map[string]interface{}{"id": "acc-1"}})
+	require.NoError(t, result.Error)
+
+	_, err := json.Marshal(result.Item.ToJSON())
+	require.NoError(t, err, "operation response must be JSON-encodable")
+
+	item := store.Get("", "accounts").Get("acc-1")
+	require.NotNil(t, item)
+	_, err = json.Marshal(item.ToJSON())
+	require.NoError(t, err, "stored item must be JSON-encodable")
+
+	meta, ok := item.Data["meta"].(map[string]interface{})
+	require.True(t, ok, "expected map[string]interface{}, got %T", item.Data["meta"])
+	assert.Equal(t, "gold", meta["tier"])
+	flags, ok := meta["flags"].([]interface{})
+	require.True(t, ok)
+	_, ok = flags[0].(map[string]interface{})
+	assert.True(t, ok, "nested maps inside slices are normalised too")
+	assert.Equal(t, map[string]interface{}{"name": "Alice"}, item.Data["owner"])
 }

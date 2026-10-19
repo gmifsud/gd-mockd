@@ -579,7 +579,37 @@ func (e *OperationExecutor) evalExpr(expression string, env map[string]interface
 		return nil, fmt.Errorf("eval %q: %w", expression, err)
 	}
 
-	return result, nil
+	return jsonCompatible(result), nil
+}
+
+// jsonCompatible converts expression results into values encoding/json can
+// marshal. expr builtins such as fromPairs() return map[interface{}]interface{},
+// which would otherwise be stored as-is and make every later response for the
+// item fail to encode. Containers are copied, never modified in place, because
+// they may be shared with stored items read into the expression context.
+func jsonCompatible(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[interface{}]interface{}:
+		out := make(map[string]interface{}, len(val))
+		for k, item := range val {
+			out[fmt.Sprintf("%v", k)] = jsonCompatible(item)
+		}
+		return out
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(val))
+		for k, item := range val {
+			out[k] = jsonCompatible(item)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(val))
+		for i, item := range val {
+			out[i] = jsonCompatible(item)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func (e *OperationExecutor) compileExpr(expression string, env map[string]interface{}) (*vm.Program, error) {
