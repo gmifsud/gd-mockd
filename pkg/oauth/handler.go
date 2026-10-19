@@ -5,12 +5,12 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // hasScope checks if a specific scope is present in a space-separated scope string.
@@ -201,6 +201,11 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		if codeChallenge != "" && codeChallengeMethod == "" {
 			codeChallengeMethod = "plain"
 		}
+		boundClaims, claimErr := h.provider.BindAuthorizeClaims(params)
+		if claimErr != "" {
+			h.redirectError(w, r, redirectURI, state, ErrInvalidRequest, claimErr)
+			return
+		}
 
 		authCode := &AuthorizationCode{
 			Code:                code,
@@ -211,7 +216,8 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 			Nonce:               nonce,
 			CodeChallenge:       codeChallenge,
 			CodeChallengeMethod: codeChallengeMethod,
-			ExpiresAt:           time.Now().Add(10 * time.Minute),
+			Claims:              boundClaims,
+			ExpiresAt:           h.provider.Now().Add(h.provider.codeExpiry),
 		}
 		h.provider.StoreAuthorizationCode(authCode)
 
@@ -283,7 +289,7 @@ func (h *Handler) HandleToken(w http.ResponseWriter, r *http.Request) {
 	// Get client credentials (from Authorization header or form body)
 	clientID, clientSecret, ok := r.BasicAuth()
 	if !ok {
-		clientID = r.FormValue("client_id")        
+		clientID = r.FormValue("client_id")
 		clientSecret = r.FormValue("client_secret")
 	}
 
@@ -302,8 +308,8 @@ func (h *Handler) HandleToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Request, clientID, clientSecret string) {
-	code := r.FormValue("code")                 
-	redirectURI := r.FormValue("redirect_uri")  
+	code := r.FormValue("code")
+	redirectURI := r.FormValue("redirect_uri")
 	codeVerifier := r.FormValue("code_verifier")
 
 	if code == "" {
@@ -365,11 +371,7 @@ func (h *Handler) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Re
 	}
 
 	// Generate tokens
-	tokenClaims := map[string]interface{}{
-		"sub":       authCode.UserID,
-		"client_id": clientID,
-		"scope":     scope,
-	}
+	tokenClaims := accessClaims(authCode.Claims, authCode.UserID, clientID, scope)
 
 	accessToken, err := h.provider.GenerateToken(tokenClaims)
 	if err != nil {
@@ -392,11 +394,13 @@ func (h *Handler) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Re
 			return
 		}
 		h.provider.StoreRefreshToken(&RefreshTokenData{
-			Token:     refreshToken,
-			ClientID:  clientID,
-			UserID:    authCode.UserID,
-			Scope:     scope,
-			ExpiresAt: time.Now().Add(h.provider.refreshExpiry),
+			Token:       refreshToken,
+			ClientID:    clientID,
+			UserID:      authCode.UserID,
+			Scope:       scope,
+			Claims:      authCode.Claims,
+			AccessToken: accessToken,
+			ExpiresAt:   h.provider.Now().Add(h.provider.refreshExpiry),
 		})
 		response.RefreshToken = refreshToken
 	}
@@ -462,7 +466,7 @@ func (h *Handler) handleClientCredentialsGrant(w http.ResponseWriter, r *http.Re
 
 func (h *Handler) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request, clientID, clientSecret string) {
 	refreshToken := r.FormValue("refresh_token")
-	scope := r.FormValue("scope")               
+	scope := r.FormValue("scope")
 
 	// Validate scopes against allowed scopes
 	if msg := h.validateScopes(scope); msg != "" {
@@ -487,54 +491,52 @@ func (h *Handler) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Validate refresh token
-	refreshData, err := h.provider.ValidateRefreshToken(refreshToken, clientID)
-	if err != nil {
-		h.errorResponse(w, http.StatusBadRequest, ErrInvalidGrant, err.Error())
-		return
+	// effectiveScope resolves the granted scope: requested, else the original
+	// grant's, else the provider defaults.
+	effectiveScope := func(original string) string {
+		if scope != "" {
+			return scope
+		}
+		if original != "" {
+			return original
+		}
+		return strings.Join(h.provider.config.DefaultScopes, " ")
 	}
 
-	// Use original scope if not specified
-	if scope == "" {
-		scope = refreshData.Scope
-	}
-
-	// If scope is still empty after refresh data fallback, use default scopes
-	if scope == "" && len(h.provider.config.DefaultScopes) > 0 {
-		scope = strings.Join(h.provider.config.DefaultScopes, " ")
-	}
-
-	// Generate new access token
-	tokenClaims := map[string]interface{}{
-		"sub":       refreshData.UserID,
-		"client_id": clientID,
-		"scope":     scope,
-	}
-
-	accessToken, err := h.provider.GenerateToken(tokenClaims)
-	if err != nil {
-		h.errorResponse(w, http.StatusInternalServerError, ErrServerError, "failed to generate access token")
-		return
-	}
-
-	// By default the refresh token is reusable. With rotation enabled it is
-	// single-use: consume it and hand out a replacement.
+	var (
+		data        RefreshTokenData
+		accessToken string
+	)
 	if h.provider.config.RotateRefreshTokens {
-		rotated, err := h.provider.GenerateRefreshToken()
-		if err != nil {
-			h.errorResponse(w, http.StatusInternalServerError, ErrServerError, "failed to generate refresh token")
+		// Single-use: consume the presented token and publish exactly one
+		// successor in one atomic transition (see Provider.RotateRefreshToken).
+		result, err := h.provider.RotateRefreshToken(refreshToken, clientID, func(consumed RefreshTokenData) (string, error) {
+			return h.provider.GenerateToken(accessClaims(consumed.Claims, consumed.UserID, clientID, effectiveScope(consumed.Scope)))
+		})
+		if errors.Is(err, ErrTokenMint) {
+			h.errorResponse(w, http.StatusInternalServerError, ErrServerError, "failed to generate tokens")
 			return
 		}
-		h.provider.RevokeToken(refreshToken)
-		h.provider.StoreRefreshToken(&RefreshTokenData{
-			Token:     rotated,
-			ClientID:  clientID,
-			UserID:    refreshData.UserID,
-			Scope:     refreshData.Scope,
-			ExpiresAt: time.Now().Add(h.provider.refreshExpiry),
-		})
-		refreshToken = rotated
+		if err != nil {
+			h.errorResponse(w, http.StatusBadRequest, ErrInvalidGrant, err.Error())
+			return
+		}
+		data, accessToken, refreshToken = result.Consumed, result.AccessToken, result.RefreshToken
+	} else {
+		// Reusable: the presented token stays valid and is echoed back.
+		refreshData, err := h.provider.ValidateRefreshToken(refreshToken, clientID)
+		if err != nil {
+			h.errorResponse(w, http.StatusBadRequest, ErrInvalidGrant, err.Error())
+			return
+		}
+		data = *refreshData
+		accessToken, err = h.provider.GenerateToken(accessClaims(data.Claims, data.UserID, clientID, effectiveScope(data.Scope)))
+		if err != nil {
+			h.errorResponse(w, http.StatusInternalServerError, ErrServerError, "failed to generate access token")
+			return
+		}
 	}
+	scope = effectiveScope(data.Scope)
 
 	response := &TokenResponse{
 		AccessToken:  accessToken,
@@ -546,7 +548,7 @@ func (h *Handler) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request
 
 	// Generate new ID token if openid scope is requested
 	if hasScope(scope, "openid") {
-		if idToken := h.generateIDTokenForUser(refreshData.UserID, clientID, "", nil); idToken != "" {
+		if idToken := h.generateIDTokenForUser(data.UserID, clientID, "", nil); idToken != "" {
 			response.IDToken = idToken
 		}
 	}
@@ -628,11 +630,12 @@ func (h *Handler) handlePasswordGrant(w http.ResponseWriter, r *http.Request, cl
 			return
 		}
 		h.provider.StoreRefreshToken(&RefreshTokenData{
-			Token:     refreshToken,
-			ClientID:  clientID,
-			UserID:    userID,
-			Scope:     scope,
-			ExpiresAt: time.Now().Add(h.provider.refreshExpiry),
+			Token:       refreshToken,
+			ClientID:    clientID,
+			UserID:      userID,
+			Scope:       scope,
+			AccessToken: accessToken,
+			ExpiresAt:   h.provider.Now().Add(h.provider.refreshExpiry),
 		})
 		response.RefreshToken = refreshToken
 	}
@@ -761,7 +764,7 @@ func (h *Handler) HandleIntrospect(w http.ResponseWriter, r *http.Request) {
 	// Get client credentials (required for introspection per RFC 7662)
 	clientID, clientSecret, ok := r.BasicAuth()
 	if !ok {
-		clientID = r.FormValue("client_id")        
+		clientID = r.FormValue("client_id")
 		clientSecret = r.FormValue("client_secret")
 	}
 
@@ -859,7 +862,7 @@ func (h *Handler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	// Get client credentials
 	clientID, clientSecret, ok := r.BasicAuth()
 	if !ok {
-		clientID = r.FormValue("client_id")        
+		clientID = r.FormValue("client_id")
 		clientSecret = r.FormValue("client_secret")
 	}
 
@@ -907,4 +910,9 @@ func (h *Handler) redirectError(w http.ResponseWriter, r *http.Request, redirect
 	redirectURL.RawQuery = q.Encode()
 
 	http.Redirect(w, r, redirectURL.String(), http.StatusFound)
+}
+
+// Provider returns the provider behind this handler.
+func (h *Handler) Provider() *Provider {
+	return h.provider
 }

@@ -4,7 +4,7 @@ A local, stateful stand-in for Wolt's partner integration APIs, built on mockd. 
 
 | Wolt surface | Covered by | Behaviour |
 |---|---|---|
-| Authentication 2.0 (`integrations-authentication-service`) | mockd OAuth provider | Authorization-code flow, HTTP Basic client auth, 1 h RS256 access tokens, **single-use** 30-day refresh tokens |
+| Authentication 2.0 (`integrations-authentication-service`) | mockd OAuth provider | Authorization-code flow (1 h single-use codes), HTTP Basic client auth, 1 h RS256 access tokens carrying `integration.venue_id`, **single-use** 30-day refresh tokens; refresh revokes the previous access token and refresh-token reuse revokes the newly issued pair |
 | Order API v1 + v2 (`pos-integration-service`) | tables + custom operations | Full lifecycle with Wolt's transition rules, both payload versions kept in sync |
 | Menu API | tables + custom operations | Menu push, async menu export (`resource_url` polling), item/inventory/option updates with identifier validation |
 | Venue API | tables + custom operations | Status, online/offline, opening hours, special hours, settings, delivery provider |
@@ -67,10 +67,10 @@ Reset all state to the fixtures at any time: `curl -X POST http://localhost:4290
 
 Allowed OAuth redirect URIs are listed under `mocks[wolt-auth].oauth.clients` in `mockd.yaml`; add yours there.
 
-**Getting a token** (the authorize step stands in for Wolt's merchant onboarding and auto-approves the venue owner):
+**Getting a token** (the authorize step stands in for Wolt's merchant onboarding and auto-approves the venue named by `venue_id`; seeded venues are `68656c6c6f76326f72646572` and `wolt-pilot-venue-b`):
 
 ```bash
-curl -si "http://localhost:4280/oauth2/authorize?client_id=wolt-pilot-client&redirect_uri=http://localhost:3000/wolt/oauth/callback&response_type=code&state=abc" | grep -i location
+curl -si "http://localhost:4280/oauth2/authorize?client_id=wolt-pilot-client&redirect_uri=http://localhost:3000/wolt/oauth/callback&response_type=code&state=abc&venue_id=68656c6c6f76326f72646572" | grep -i location
 # Location: http://localhost:3000/wolt/oauth/callback?code=<code>&state=abc
 
 curl -s -u wolt-pilot-client:wolt-pilot-secret http://localhost:4280/oauth2/token \
@@ -79,10 +79,15 @@ curl -s -u wolt-pilot-client:wolt-pilot-secret http://localhost:4280/oauth2/toke
 
 curl -s -u wolt-pilot-client:wolt-pilot-secret http://localhost:4280/oauth2/token \
   -d grant_type=refresh_token -d refresh_token=<refresh_token>
-# returns a NEW refresh_token; replaying the old one fails with invalid_grant
+# returns a NEW refresh_token and access token; the previous access token stops working.
+# Replaying a consumed refresh token fails with invalid_grant AND revokes the newest pair
+# (Wolt: "reusing the same refresh token ... will immediately deactivate and revoke the
+# newly issued access and refresh tokens"), so the venue must be onboarded again.
 ```
 
-The API endpoints accept any `Authorization: Bearer <token>`. `Bearer expired-token` always yields `401 {"detail":"Unauthorized"}`, and `wolt_sim.py audit` fails if any captured Wolt API request lacked a bearer token.
+**Guarded endpoints.** `PATCH /venues/{venueId}/items` and `PATCH /venues/{venueId}/items/inventory` require a `wolt-auth` access token (valid signature, issuer and expiry, not revoked) whose `integration.venue_id` equals `{venueId}`. Missing or invalid tokens get `401 {"detail":"Unauthorized"}`; another venue's token gets `403 {"detail":"Forbidden"}`. Both are checked before validation, so a rejected request never changes state. To demo without tokens, set `mode: warn` on `x-wolt-venue-bearer` (violations are logged, not rejected); never do this in acceptance tests.
+
+The other endpoints are not guarded yet and accept any `Authorization: Bearer <token>`; there, `Bearer expired-token` yields `401 {"detail":"Unauthorized"}`. `wolt_sim.py audit` fails if any captured Wolt API request lacked a bearer token.
 
 ## Fixtures
 
@@ -220,7 +225,7 @@ go build -o mockd ./cmd/mockd
 MOCKD_BIN=$PWD/mockd python3 examples/wolt/tests/test_wolt_twin.py
 ```
 
-15 end-to-end scenarios (OAuth, every order flow, webhooks with signature verification, Order Submitter, venue, menu, Drive with JWT verification, audit). CI runs them in the `wolt-twin` job.
+18 end-to-end scenarios (OAuth incl. venue binding, revocation, reuse and concurrent refresh; guarded menu updates across two venues; every order flow, webhooks with signature verification, Order Submitter, venue, menu, Drive with JWT verification, audit). CI runs them in the `wolt-twin` job.
 
 ## Where the contract comes from
 
@@ -240,7 +245,8 @@ python3 -I examples/wolt/tools/build_specs.py /tmp/wolt-mcp/specs/wolt-official.
 ### Known differences from Wolt
 
 - One host serves all APIs; Wolt splits them across `integrations-authentication-service`, `pos-integration-service` and `daas-public-api`.
-- Bearer tokens are not validated against the OAuth provider (any token is accepted except `expired-token`).
+- Only the Menu item and inventory updates validate bearer tokens against the OAuth provider; other endpoints accept any token except `expired-token`.
+- Venue binding at `/oauth2/authorize?venue_id=` and the 401/403 split on guarded endpoints are twin policy (see `PRD-price-stock-pilot.md` §5).
 - The menu export is `READY` immediately (Wolt may return `PENDING` first). Menu item updates are validated and recorded but not applied to the stored menu; `replace-items` does not change order items.
 - V1 and V2 fixtures share identity, status and delivery data, but their line items are Wolt's two different reference examples.
 - Rate limits, venue offline alerts during opening hours and rejection alerts are not computed; trigger them with `chaos` and `venue-event`.

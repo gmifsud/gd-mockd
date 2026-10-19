@@ -60,6 +60,19 @@ x-drive-created: &drive-created
   errors: *drive-errors
   custom: { status: 201 }
 
+# Bearer guard for the Phase 1 Menu surface (PRD-price-stock-pilot.md §5.3).
+# Tokens must be issued by wolt-auth (signature, issuer, expiry, revocation) and
+# carry integration.venue_id equal to the {venueId} in the path. Evaluated before
+# validation and state changes. 401 vs 403 is simulation policy (G1/G4).
+x-wolt-venue-bearer: &wolt-venue-bearer
+  bearer:
+    provider: wolt-auth
+    claims:
+      - { claim: integration.venue_id, equalsPathParam: venueId }
+  onUnauthenticated: { status: 401, body: '{"detail":"Unauthorized"}' }
+  onForbidden: { status: 403, body: '{"detail":"Forbidden"}' }
+  mode: enforce
+
 # ── Fixture building blocks (Wolt's own example payloads) ──────────────────────
 x-venue: &venue { id: "68656c6c6f76326f72646572", name: "Wolt's Cafe", external_venue_id: "wolt_external_store" }
 
@@ -261,6 +274,14 @@ mocks:
       tokenExpiry: "1h"        # Wolt: access tokens live one hour
       refreshExpiry: "30d"     # Wolt: refresh tokens live 30 days ...
       rotateRefreshTokens: true # ... and are single-use
+      revokePreviousAccessToken: true  # Wolt: "the previous access token and refresh token are invalidated"
+      refreshTokenReuseDetection: true # Wolt: reusing a refresh token revokes the newly issued pair
+      authorizationCodeExpiry: "1h"    # Wolt: codes are single-use and valid for 1 hour
+      # Simulation policy: the venue an onboarding is for comes from
+      # /oauth2/authorize?venue_id=..., standing in for Wolt's merchant consent.
+      # Access tokens carry it as integration.venue_id, as Wolt's do.
+      authorizeClaims:
+        - { param: venue_id, claim: integration.venue_id, pattern: '[A-Za-z0-9_-]{1,64}', required: true }
       defaultScopes: [offline]
       clients:
         - clientId: wolt-pilot-client
@@ -269,6 +290,7 @@ mocks:
             - http://localhost:3000/wolt/oauth/callback
             - http://localhost:8080/wolt/oauth/callback
             - https://oauth.pstmn.io/v1/callback
+            - https://onboarding.mockd.invalid/callback   # Integration Emulation.Tests
           grantTypes: [authorization_code, refresh_token]
       users:
         - username: venue-owner
@@ -295,7 +317,9 @@ mocks:
       matcher: { method: PATCH, path: "/order/{woltOrderReferenceId}/status/cancel" }
       statefulBinding: { table: deliveries, action: custom, operation: CancelDelivery }
 
-  # Negative-auth fixture: any call presenting this token gets 401.
+  # Demo fixture for endpoints that are not yet guarded (Order, Venue, Drive):
+  # any call presenting this literal token gets 401. Guarded endpoints
+  # (x-wolt-venue-bearer) reject it on their own, as they do any non-wolt-auth token.
   - id: wolt-expired-token
     name: Expired bearer token
     type: http
@@ -353,7 +377,8 @@ tables:
       errors: *marketplace-errors
       fields: { hide: [id, _delivery_provider, _offline_until, _special_opening_times] }
     seedData:
-      - id: "68656c6c6f76326f72646572"
+      - &venue-a-seed
+        id: "68656c6c6f76326f72646572"
         external_venue_id: wolt_external_store
         status: { is_open: true, is_online: true, is_ipad_free: true }
         contact_details: { address: "Pohjoinen Rautatiekatu 21", phone: "+3581234567" }
@@ -379,6 +404,8 @@ tables:
         _delivery_provider: WOLT
         _offline_until: null
         _special_opening_times: null
+      # Second venue for two-owner isolation tests.
+      - { <<: *venue-a-seed, id: wolt-pilot-venue-b, external_venue_id: wolt_external_store_b }
   - name: venue_events
     idField: id
     idStrategy: sequence
@@ -408,6 +435,20 @@ tables:
                 - external_data: { external_id: "123" }
                   name: [{ lang: en, value: Coca-Cola 0.33 l }]
                   price: 225
+                  vat_percentage: 14
+                  enabled: true
+      - id: wolt-pilot-venue-b
+        menu:
+          id: "wolt-pilot-menu-b"
+          currency: EUR
+          primary_language: en
+          categories:
+            - id: drinks
+              name: [{ lang: en, value: Drinks }]
+              items:
+                - external_data: { external_id: "123" }
+                  name: [{ lang: en, value: Coca-Cola 0.33 l }]
+                  price: 250
                   vat_percentage: 14
                   enabled: true
   - name: menu_events
@@ -1159,8 +1200,8 @@ extend:
   - { mock: venue.update-venue-special-opening-times, table: venues, action: custom, operation: SetVenueSpecialOpeningTimes, response: *accepted }
   # Menu API
   - { mock: menu.create-menu, table: menus, action: custom, operation: CreateMenu, response: *accepted }
-  - { mock: menu.update-items, table: menus, action: custom, operation: UpdateMenuItems, response: *accepted }
-  - { mock: menu.update-item-inventory, table: menus, action: custom, operation: UpdateMenuInventory, response: *accepted }
+  - { mock: menu.update-items, table: menus, action: custom, operation: UpdateMenuItems, response: *accepted, auth: *wolt-venue-bearer }
+  - { mock: menu.update-item-inventory, table: menus, action: custom, operation: UpdateMenuInventory, response: *accepted, auth: *wolt-venue-bearer }
   - { mock: menu.update-options, table: menus, action: custom, operation: UpdateMenuOptions, response: *accepted }
   - mock: menu.get-menu
     table: menus

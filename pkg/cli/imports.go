@@ -202,6 +202,14 @@ func processTablesAndExtend(collection *config.MockCollection) error {
 				// a stateful binding.
 				target.HTTP.ClearConflictingResponseTypes()
 
+				// Guard the bound endpoint when the binding declares auth
+				if binding.Auth != nil {
+					if err := binding.Auth.Validate(); err != nil {
+						return fmt.Errorf("extend %q: %w", binding.Mock, err)
+					}
+					target.HTTP.Auth = binding.Auth
+				}
+
 				// Set StatefulBinding on the mock
 				target.HTTP.StatefulBinding = &mock.StatefulBinding{
 					Table:     binding.Table,

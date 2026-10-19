@@ -261,6 +261,36 @@ curl -X POST http://localhost:4280/token \
 
 If the client has a `clientSecret` configured, it must still be provided. PKCE is an additional verification layer, not a replacement for confidential client authentication.
 
+### Claims bound at authorization
+
+`authorizeClaims` turns an `/authorize` parameter into a claim on every access token derived from the code, including after refresh. This models providers whose tokens identify the tenant the user consented for:
+
+```yaml
+oauth:
+  authorizeClaims:
+    - { param: venue_id, claim: integration.venue_id, pattern: '[A-Za-z0-9_-]{1,64}', required: true }
+```
+
+`GET /authorize?...&venue_id=venue-a` issues a code whose tokens carry `{"integration":{"venue_id":"venue-a"}}`. A missing (when `required`), repeated or non-matching value redirects with `error=invalid_request` and no code.
+
+### Protecting mock endpoints
+
+An HTTP mock (or an `extend` entry) can require a token from an OAuth mock:
+
+```yaml
+auth:
+  bearer:
+    provider: my-oauth            # id of the OAuth mock
+    audience: my-api              # optional
+    claims:
+      - { claim: integration.venue_id, equalsPathParam: venueId }
+  onUnauthenticated: { status: 401, body: '{"error":"unauthorized"}' }   # missing/invalid/expired/revoked
+  onForbidden: { status: 403, body: '{"error":"forbidden"}' }            # claim requirement failed
+  mode: enforce                   # or warn: log and continue
+```
+
+The guard runs after matching and before validation, stateful bindings and responses, so a rejected request never changes state.
+
 ### Refresh Token
 
 Exchange a refresh token for a new access token. By default the original refresh token is returned (not rotated); set `rotateRefreshTokens: true` to make refresh tokens single-use, so each refresh returns a new one and replaying the old one fails with `invalid_grant`.
@@ -405,7 +435,11 @@ mocks:
 | `issuer` | string | `https://mock-oauth.local` | Issuer URL for JWT `iss` claim and discovery endpoints |
 | `tokenExpiry` | string | `"1h"` | Access token lifetime (Go duration or `Nd` for days) |
 | `refreshExpiry` | string | `"7d"` | Refresh token lifetime |
-| `rotateRefreshTokens` | boolean | `false` | Single-use refresh tokens: each `refresh_token` grant invalidates the presented token and returns a new one (reuse fails with `invalid_grant`) |
+| `rotateRefreshTokens` | boolean | `false` | Single-use refresh tokens: each `refresh_token` grant invalidates the presented token and returns a new one (reuse fails with `invalid_grant`). Concurrent refreshes of one token: exactly one succeeds |
+| `revokePreviousAccessToken` | boolean | `false` | On rotation, revoke the access token issued with the consumed refresh token (requires `rotateRefreshTokens`) |
+| `refreshTokenReuseDetection` | boolean | `false` | Presenting a consumed refresh token again (same client) revokes the chain's current access and refresh tokens (requires `rotateRefreshTokens`) |
+| `authorizationCodeExpiry` | string | `"10m"` | Authorization code lifetime |
+| `authorizeClaims` | AuthorizeClaim[] | | Bind `/authorize` parameters to the issued code as claims: `param`, `claim` (dotted path, not a reserved claim), `pattern` (whole-value regex), `required` |
 | `defaultScopes` | string[] | `["openid", "profile", "email"]` | Allowed scopes — requests for unlisted scopes are rejected |
 | `defaultClaims` | map | `{}` | Claims added to every access token |
 | `clients` | ClientConfig[] | | OAuth client definitions |

@@ -16,6 +16,29 @@ type OAuthConfig struct {
 	// RotateRefreshTokens makes refresh tokens single-use: each refresh_token
 	// grant invalidates the presented token and returns a new one.
 	RotateRefreshTokens bool `json:"rotateRefreshTokens,omitempty" yaml:"rotateRefreshTokens,omitempty"`
+	// RevokePreviousAccessToken revokes the access token issued alongside a
+	// refresh token when that refresh token is rotated. Requires RotateRefreshTokens.
+	RevokePreviousAccessToken bool `json:"revokePreviousAccessToken,omitempty" yaml:"revokePreviousAccessToken,omitempty"`
+	// RefreshTokenReuseDetection treats a second presentation of a consumed
+	// refresh token (by the client it was issued to) as reuse and revokes the
+	// chain's current access and refresh tokens. Requires RotateRefreshTokens.
+	RefreshTokenReuseDetection bool `json:"refreshTokenReuseDetection,omitempty" yaml:"refreshTokenReuseDetection,omitempty"`
+	// AuthorizationCodeExpiry is the authorization code lifetime (default "10m").
+	AuthorizationCodeExpiry string `json:"authorizationCodeExpiry,omitempty" yaml:"authorizationCodeExpiry,omitempty"`
+	// AuthorizeClaims bind /authorize request parameters to the issued code as
+	// token claims; they are carried into every access token derived from it.
+	AuthorizeClaims []AuthorizeClaim `json:"authorizeClaims,omitempty" yaml:"authorizeClaims,omitempty"`
+}
+
+// AuthorizeClaim copies one /authorize request parameter into a claim bound to
+// the issued authorization code. Claim is a dotted path ("integration.venue_id"
+// produces {"integration":{"venue_id":...}}); its first segment must not be a
+// reserved claim. Pattern, when set, must match the whole parameter value.
+type AuthorizeClaim struct {
+	Param    string `json:"param" yaml:"param"`
+	Claim    string `json:"claim" yaml:"claim"`
+	Pattern  string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	Required bool   `json:"required,omitempty" yaml:"required,omitempty"`
 }
 
 // ClientConfig defines an OAuth client configuration
@@ -57,8 +80,9 @@ type AuthorizationCode struct {
 	Scope               string
 	UserID              string
 	Nonce               string
-	CodeChallenge       string // PKCE: stored code_challenge
-	CodeChallengeMethod string // PKCE: "S256" or "plain"
+	CodeChallenge       string                 // PKCE: stored code_challenge
+	CodeChallengeMethod string                 // PKCE: "S256" or "plain"
+	Claims              map[string]interface{} // bound via AuthorizeClaims; treated as immutable
 	ExpiresAt           time.Time
 }
 
@@ -69,6 +93,12 @@ type RefreshTokenData struct {
 	UserID    string
 	Scope     string
 	ExpiresAt time.Time
+	// Claims bound at authorization; copied to every successor. Treated as immutable.
+	Claims map[string]interface{}
+	// AccessToken is the access token issued together with this refresh token.
+	AccessToken string
+	// Family identifies the rotation chain (the chain's first refresh token).
+	Family string
 }
 
 // OpenIDConfiguration represents the OIDC discovery document

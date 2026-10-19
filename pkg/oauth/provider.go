@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -39,8 +40,19 @@ type Provider struct {
 	revokedTokensMu sync.RWMutex
 	revokedTokens   map[string]time.Time // token -> revocation time (for cleanup)
 
+	// Rotation chains (guarded by refreshTokensMu): consumed refresh tokens
+	// and the current head refresh token of each chain.
+	tombstones map[string]refreshTombstone
+	families   map[string]string
+
 	tokenExpiry   time.Duration
 	refreshExpiry time.Duration
+	codeExpiry    time.Duration
+
+	authorizeClaims []compiledAuthorizeClaim
+
+	// clock holds an optional func() time.Time override (tests); see Now.
+	clock atomic.Value
 
 	// Cleanup goroutine management
 	stopCleanup chan struct{}
@@ -51,6 +63,22 @@ type Provider struct {
 func NewProvider(config *OAuthConfig) (*Provider, error) {
 	if config == nil {
 		return nil, errors.New("config cannot be nil")
+	}
+
+	authorizeClaims, err := compileAuthorizeClaims(config.AuthorizeClaims)
+	if err != nil {
+		return nil, err
+	}
+	if (config.RevokePreviousAccessToken || config.RefreshTokenReuseDetection) && !config.RotateRefreshTokens {
+		return nil, errors.New("revokePreviousAccessToken and refreshTokenReuseDetection require rotateRefreshTokens")
+	}
+
+	codeExpiry := 10 * time.Minute // default
+	if config.AuthorizationCodeExpiry != "" {
+		codeExpiry, err = parseDuration(config.AuthorizationCodeExpiry)
+		if err != nil || codeExpiry <= 0 {
+			return nil, fmt.Errorf("invalid authorizationCodeExpiry: %q", config.AuthorizationCodeExpiry)
+		}
 	}
 
 	// Generate RSA key pair for JWT signing
@@ -91,17 +119,21 @@ func NewProvider(config *OAuthConfig) (*Provider, error) {
 	}
 
 	p := &Provider{
-		config:        config,
-		privateKey:    privateKey,
-		publicKey:     &privateKey.PublicKey,
-		keyID:         keyID,
-		authCodes:     make(map[string]*AuthorizationCode),
-		refreshTokens: make(map[string]*RefreshTokenData),
-		revokedTokens: make(map[string]time.Time),
-		tokenExpiry:   tokenExpiry,
-		refreshExpiry: refreshExpiry,
-		stopCleanup:   make(chan struct{}),
-		cleanupDone:   make(chan struct{}),
+		config:          config,
+		privateKey:      privateKey,
+		publicKey:       &privateKey.PublicKey,
+		keyID:           keyID,
+		authCodes:       make(map[string]*AuthorizationCode),
+		refreshTokens:   make(map[string]*RefreshTokenData),
+		revokedTokens:   make(map[string]time.Time),
+		tombstones:      make(map[string]refreshTombstone),
+		families:        make(map[string]string),
+		tokenExpiry:     tokenExpiry,
+		refreshExpiry:   refreshExpiry,
+		codeExpiry:      codeExpiry,
+		authorizeClaims: authorizeClaims,
+		stopCleanup:     make(chan struct{}),
+		cleanupDone:     make(chan struct{}),
 	}
 
 	// Start background cleanup goroutine
@@ -112,7 +144,7 @@ func NewProvider(config *OAuthConfig) (*Provider, error) {
 
 // GenerateToken creates a new access token
 func (p *Provider) GenerateToken(claims map[string]interface{}) (string, error) {
-	now := time.Now()
+	now := p.Now()
 
 	jti, err := generateRandomString(32)
 	if err != nil {
@@ -144,7 +176,7 @@ func (p *Provider) GenerateToken(claims map[string]interface{}) (string, error) 
 
 // GenerateIDToken creates a new OIDC ID token
 func (p *Provider) GenerateIDToken(claims map[string]interface{}) (string, error) {
-	now := time.Now()
+	now := p.Now()
 
 	jwtClaims := jwt.MapClaims{
 		"iss":       p.config.Issuer,
@@ -217,7 +249,12 @@ func (p *Provider) ValidateToken(tokenString string) (map[string]interface{}, er
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return p.publicKey, nil
-	})
+	},
+		jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()}),
+		jwt.WithIssuer(p.config.Issuer),
+		jwt.WithExpirationRequired(),
+		jwt.WithTimeFunc(p.Now),
+	)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)
@@ -245,7 +282,7 @@ func (p *Provider) StoreAuthorizationCode(code *AuthorizationCode) {
 	p.authCodes[code.Code] = code
 
 	if len(p.authCodes) > maxAuthCodes {
-		now := time.Now()
+		now := p.Now()
 		// First pass: remove expired entries
 		for k, v := range p.authCodes {
 			if now.After(v.ExpiresAt) {
@@ -279,16 +316,18 @@ func (p *Provider) ExchangeAuthorizationCode(code, clientID, redirectURI string)
 		return nil, errors.New("invalid authorization code")
 	}
 
+	// A code presented by a client it was not issued to is rejected without
+	// being consumed, so one client cannot burn another client's code.
+	if authCode.ClientID != clientID {
+		return nil, errors.New("client_id mismatch")
+	}
+
 	// Delete the code (one-time use)
 	delete(p.authCodes, code)
 
 	// Validate the code
-	if time.Now().After(authCode.ExpiresAt) {
+	if p.Now().After(authCode.ExpiresAt) {
 		return nil, errors.New("authorization code has expired")
-	}
-
-	if authCode.ClientID != clientID {
-		return nil, errors.New("client_id mismatch")
 	}
 
 	if authCode.RedirectURI != redirectURI {
@@ -305,10 +344,20 @@ func (p *Provider) StoreRefreshToken(data *RefreshTokenData) {
 	p.refreshTokensMu.Lock()
 	defer p.refreshTokensMu.Unlock()
 
+	p.storeRefreshTokenLocked(data)
+}
+
+// storeRefreshTokenLocked stores data, starts or advances its rotation chain and
+// enforces the capacity bound. Caller holds refreshTokensMu.
+func (p *Provider) storeRefreshTokenLocked(data *RefreshTokenData) {
+	if data.Family == "" {
+		data.Family = data.Token
+	}
 	p.refreshTokens[data.Token] = data
+	p.families[data.Family] = data.Token
 
 	if len(p.refreshTokens) > maxRefreshTokens {
-		now := time.Now()
+		now := p.Now()
 		// First pass: remove expired entries
 		for k, v := range p.refreshTokens {
 			if now.After(v.ExpiresAt) {
@@ -342,7 +391,7 @@ func (p *Provider) ValidateRefreshToken(token, clientID string) (*RefreshTokenDa
 		return nil, errors.New("invalid refresh token")
 	}
 
-	if time.Now().After(data.ExpiresAt) {
+	if p.Now().After(data.ExpiresAt) {
 		delete(p.refreshTokens, token)
 		return nil, errors.New("refresh token has expired")
 	}
@@ -365,11 +414,11 @@ func (p *Provider) RevokeToken(token string) {
 
 	// Mark as revoked with timestamp for cleanup
 	p.revokedTokensMu.Lock()
-	p.revokedTokens[token] = time.Now()
+	p.revokedTokens[token] = p.Now()
 
 	if len(p.revokedTokens) > maxRevokedTokens {
 		// Remove oldest revoked entries first
-		cutoff := time.Now().Add(-24 * time.Hour)
+		cutoff := p.Now().Add(-24 * time.Hour)
 		for k, v := range p.revokedTokens {
 			if v.Before(cutoff) {
 				delete(p.revokedTokens, k)
@@ -510,7 +559,7 @@ func (p *Provider) cleanupLoop() {
 // cleanupExpiredTokens removes expired authorization codes, refresh tokens,
 // and old revoked token entries.
 func (p *Provider) cleanupExpiredTokens() {
-	now := time.Now()
+	now := p.Now()
 
 	// Cleanup expired authorization codes
 	p.authCodesMu.Lock()
@@ -528,6 +577,7 @@ func (p *Provider) cleanupExpiredTokens() {
 			delete(p.refreshTokens, token)
 		}
 	}
+	p.cleanupChainsLocked(now)
 	p.refreshTokensMu.Unlock()
 
 	// Cleanup old revoked token entries (keep for 24 hours after revocation)

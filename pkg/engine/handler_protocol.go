@@ -105,6 +105,9 @@ func (h *Handler) RegisterOAuthHandler(cfg *oauth.OAuthConfig, handler *oauth.Ha
 	h.oauthHandlers[basePath+"/introspect"] = handler
 	h.oauthHandlers[basePath+"/.well-known/jwks.json"] = handler
 	h.oauthHandlers[basePath+"/.well-known/openid-configuration"] = handler
+	if cfg.ID != "" {
+		h.oauthProviders[cfg.ID] = handler.Provider()
+	}
 }
 
 // RegisterSOAPHandler registers a SOAP handler at the specified path.
@@ -125,6 +128,12 @@ func (h *Handler) UnregisterSOAPHandler(path string) {
 func (h *Handler) UnregisterOAuthHandler(issuer string) {
 	h.oauthMu.Lock()
 	defer h.oauthMu.Unlock()
+
+	for id, provider := range h.oauthProviders {
+		if provider.Config().Issuer == issuer {
+			delete(h.oauthProviders, id)
+		}
+	}
 
 	basePath := ""
 	if issuer != "" {

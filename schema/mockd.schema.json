@@ -199,6 +199,7 @@
         "validation": {
           "$ref": "#/definitions/requestValidation"
         },
+        "auth": { "$ref": "#/definitions/httpAuth" },
         "statefulOperation": {
           "type": "string",
           "description": "Name of a custom operation to execute instead of a static response"
@@ -554,6 +555,24 @@
         "tokenExpiry": { "type": "string", "description": "Token expiry duration (e.g., '1h')" },
         "refreshExpiry": { "type": "string" },
         "rotateRefreshTokens": { "type": "boolean", "description": "Make refresh tokens single-use: each refresh_token grant invalidates the presented token and returns a new one" },
+        "revokePreviousAccessToken": { "type": "boolean", "description": "On rotation, revoke the access token issued with the consumed refresh token (requires rotateRefreshTokens)" },
+        "refreshTokenReuseDetection": { "type": "boolean", "description": "Presenting a consumed refresh token again revokes the chain's current tokens (requires rotateRefreshTokens)" },
+        "authorizationCodeExpiry": { "type": "string", "description": "Authorization code lifetime (default '10m')" },
+        "authorizeClaims": {
+          "type": "array",
+          "description": "Bind /authorize parameters to issued codes as token claims, carried into every derived access token",
+          "items": {
+            "type": "object",
+            "required": ["param", "claim"],
+            "properties": {
+              "param": { "type": "string" },
+              "claim": { "type": "string", "description": "Dotted claim path; first segment must not be reserved (iss, sub, aud, exp, ...)" },
+              "pattern": { "type": "string", "description": "Regex the whole value must match" },
+              "required": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
         "defaultScopes": { "type": "array", "items": { "type": "string" } },
         "clients": {
           "type": "array",
@@ -884,7 +903,51 @@
         "response": {
           "$ref": "#/definitions/responseTransform",
           "description": "Response transform override for this specific binding"
-        }
+        },
+        "auth": { "$ref": "#/definitions/httpAuth" }
+      },
+      "additionalProperties": false
+    },
+
+    "httpAuth": {
+      "type": "object",
+      "description": "Request authentication guard, evaluated after matching and before validation, stateful bindings and responses",
+      "required": ["bearer"],
+      "properties": {
+        "bearer": {
+          "type": "object",
+          "required": ["provider"],
+          "properties": {
+            "provider": { "type": "string", "description": "ID of the OAuth mock whose tokens are accepted (signature, issuer, expiry, revocation)" },
+            "audience": { "type": "string", "description": "Required aud value" },
+            "claims": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["claim"],
+                "properties": {
+                  "claim": { "type": "string", "description": "Dotted claim path, e.g. integration.venue_id" },
+                  "equals": { "type": "string" },
+                  "equalsPathParam": { "type": "string", "description": "Name of a path parameter of the matched request" }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "onUnauthenticated": { "$ref": "#/definitions/authFailure", "description": "Response for missing/invalid/expired/revoked tokens (default 401)" },
+        "onForbidden": { "$ref": "#/definitions/authFailure", "description": "Response for failed claim requirements (default 403)" },
+        "mode": { "type": "string", "enum": ["enforce", "warn"], "default": "enforce" }
+      },
+      "additionalProperties": false
+    },
+    "authFailure": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "body": { "type": "string" }
       },
       "additionalProperties": false
     },

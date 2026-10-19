@@ -769,7 +769,15 @@ func (mm *MockManager) registerOAuthMock(m *mock.Mock) error {
 		DefaultClaims: oauthSpec.DefaultClaims,
 		Enabled:       m.Enabled == nil || *m.Enabled,
 
-		RotateRefreshTokens: oauthSpec.RotateRefreshTokens,
+		RotateRefreshTokens:        oauthSpec.RotateRefreshTokens,
+		RevokePreviousAccessToken:  oauthSpec.RevokePreviousAccessToken,
+		RefreshTokenReuseDetection: oauthSpec.RefreshTokenReuseDetection,
+		AuthorizationCodeExpiry:    oauthSpec.AuthorizationCodeExpiry,
+	}
+	for _, c := range oauthSpec.AuthorizeClaims {
+		cfg.AuthorizeClaims = append(cfg.AuthorizeClaims, oauth.AuthorizeClaim{
+			Param: c.Param, Claim: c.Claim, Pattern: c.Pattern, Required: c.Required,
+		})
 	}
 
 	// Set defaults if not specified

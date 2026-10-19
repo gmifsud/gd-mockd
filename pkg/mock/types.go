@@ -265,6 +265,10 @@ type HTTPSpec struct {
 	// Validation defines request validation rules (runs after matching, before response)
 	Validation *validation.RequestValidation `json:"validation,omitempty" yaml:"validation,omitempty"`
 
+	// Auth guards the mock with request authentication (runs after matching,
+	// before validation, stateful bindings and responses).
+	Auth *HTTPAuth `json:"auth,omitempty" yaml:"auth,omitempty"`
+
 	// StatefulOperation routes this mock through a registered custom operation.
 	// When set, the JSON request body becomes the operation input, and the
 	// operation result is returned as JSON. This allows HTTP endpoints like
@@ -911,6 +915,29 @@ type OAuthSpec struct {
 	// RotateRefreshTokens makes refresh tokens single-use: each refresh_token
 	// grant invalidates the presented token and returns a new one.
 	RotateRefreshTokens bool `json:"rotateRefreshTokens,omitempty" yaml:"rotateRefreshTokens,omitempty"`
+
+	// RevokePreviousAccessToken revokes the access token issued alongside a
+	// refresh token when it is rotated. Requires RotateRefreshTokens.
+	RevokePreviousAccessToken bool `json:"revokePreviousAccessToken,omitempty" yaml:"revokePreviousAccessToken,omitempty"`
+
+	// RefreshTokenReuseDetection revokes a chain's current tokens when a consumed
+	// refresh token is presented again. Requires RotateRefreshTokens.
+	RefreshTokenReuseDetection bool `json:"refreshTokenReuseDetection,omitempty" yaml:"refreshTokenReuseDetection,omitempty"`
+
+	// AuthorizationCodeExpiry is the authorization code lifetime (default "10m").
+	AuthorizationCodeExpiry string `json:"authorizationCodeExpiry,omitempty" yaml:"authorizationCodeExpiry,omitempty"`
+
+	// AuthorizeClaims bind /authorize parameters to issued codes as token claims.
+	AuthorizeClaims []OAuthAuthorizeClaim `json:"authorizeClaims,omitempty" yaml:"authorizeClaims,omitempty"`
+}
+
+// OAuthAuthorizeClaim copies an /authorize parameter into a claim bound to the
+// issued code (dotted claim path, e.g. "integration.venue_id").
+type OAuthAuthorizeClaim struct {
+	Param    string `json:"param" yaml:"param"`
+	Claim    string `json:"claim" yaml:"claim"`
+	Pattern  string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	Required bool   `json:"required,omitempty" yaml:"required,omitempty"`
 }
 
 // OAuthClient defines an OAuth client configuration.

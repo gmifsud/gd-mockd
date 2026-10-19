@@ -37,6 +37,9 @@ ADMIN = "http://localhost:4290"
 SECRET = "wolt-pilot-secret"
 DRIVE_SECRET = "wolt-drive-secret"
 VENUE = "68656c6c6f76326f72646572"
+VENUE_B = "wolt-pilot-venue-b"
+CLIENT, CLIENT_SECRET = "wolt-pilot-client", "wolt-pilot-secret"
+REDIRECT = "http://localhost:3000/wolt/oauth/callback"
 DRIVE_VENUE = "6710d0000000000000000001"
 BEARER = {"Authorization": "Bearer test-token"}
 
@@ -70,6 +73,48 @@ def form(path, fields, user, password):
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
+
+
+def authorize(venue=None, state="s1"):
+    """GET /oauth2/authorize (auto-approved) and return the redirect's query parameters."""
+    fields = {"client_id": CLIENT, "redirect_uri": REDIRECT, "response_type": "code", "state": state, "scope": "offline"}
+    if venue is not None:
+        fields["venue_id"] = venue
+    opener = urllib.request.build_opener(NoRedirect)
+    try:
+        opener.open(f"{MOCK}/oauth2/authorize?{urllib.parse.urlencode(fields)}")
+    except urllib.error.HTTPError as err:
+        return urllib.parse.parse_qs(urllib.parse.urlparse(err.headers["Location"]).query)
+    raise AssertionError("authorize did not redirect")
+
+
+def onboard(venue):
+    """Authorization-code exchange for one venue; returns the token response."""
+    code = authorize(venue)["code"][0]
+    status, tokens = form("/oauth2/token", {"grant_type": "authorization_code", "code": code, "redirect_uri": REDIRECT},
+                          CLIENT, CLIENT_SECRET)
+    assert status == 200, tokens
+    return tokens
+
+
+def refresh(refresh_token):
+    return form("/oauth2/token", {"grant_type": "refresh_token", "refresh_token": refresh_token}, CLIENT, CLIENT_SECRET)
+
+
+def auth(tokens):
+    return {"Authorization": "Bearer " + tokens["access_token"]}
+
+
+def jwt_payload(token):
+    payload = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+
+
+def menu_events():
+    """The menu_events journal, oldest first."""
+    status, body = call("GET", "/state/resources/menu_events/items?limit=1000", base=ADMIN)
+    assert status == 200, body
+    return sorted(body.get("data", []), key=lambda e: int(e["id"]))
 
 
 def verify_jwt(token, secret):
@@ -180,20 +225,15 @@ class WoltTwinTest(unittest.TestCase):
 
     # ── Authentication 2.0 ──
     def test_oauth_authorization_code_and_single_use_refresh(self):
-        redirect = "http://localhost:3000/wolt/oauth/callback"
-        opener = urllib.request.build_opener(NoRedirect)
-        query = urllib.parse.urlencode({"client_id": "wolt-pilot-client", "redirect_uri": redirect,
-                                        "response_type": "code", "state": "s1", "scope": "offline"})
-        with self.assertRaises(urllib.error.HTTPError) as ctx:
-            opener.open(f"{MOCK}/oauth2/authorize?{query}")
-        location = urllib.parse.urlparse(ctx.exception.headers["Location"])
-        params = urllib.parse.parse_qs(location.query)
+        redirect = REDIRECT
+        params = authorize(VENUE)
         self.assertEqual(params["state"], ["s1"])
 
         status, tokens = form("/oauth2/token", {"grant_type": "authorization_code", "code": params["code"][0],
                                                 "redirect_uri": redirect}, "wolt-pilot-client", "wolt-pilot-secret")
         self.assertEqual(status, 200)
         self.assertEqual(tokens["expires_in"], 3600)
+        self.assertEqual(jwt_payload(tokens["access_token"])["integration"], {"venue_id": VENUE}, "T3: venue claim")
         status, _ = form("/oauth2/token", {"grant_type": "authorization_code", "code": params["code"][0],
                                            "redirect_uri": redirect}, "wolt-pilot-client", "wolt-pilot-secret")
         self.assertEqual(status, 400, "authorization codes are single-use")
@@ -205,6 +245,68 @@ class WoltTwinTest(unittest.TestCase):
         status, err = form("/oauth2/token", {"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]},
                            "wolt-pilot-client", "wolt-pilot-secret")
         self.assertEqual((status, err["error"]), (400, "invalid_grant"), "refresh tokens are single-use")
+        # R4: that replay was a reuse, so the pair issued by the first refresh is revoked too.
+        self.assertEqual(refresh(refreshed["refresh_token"])[0], 400, "R4: reuse revokes the newly issued refresh token")
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items/inventory", {"data": [{"sku": "1", "inventory": 1}]},
+                              headers=auth(refreshed))[0], 401, "R4: reuse revokes the newly issued access token")
+
+    def test_authorize_requires_a_valid_venue(self):
+        for venue in (None, "", "bad venue/../x", "x" * 65):
+            params = authorize(venue)
+            self.assertNotIn("code", params, f"T4: no code for venue_id={venue!r}")
+            self.assertEqual(params["error"], ["invalid_request"])
+
+    def test_menu_updates_require_a_token_bound_to_the_venue(self):
+        a, b = onboard(VENUE), onboard(VENUE_B)
+        self.assertEqual(jwt_payload(b["access_token"])["integration"]["venue_id"], VENUE_B)
+        item = {"data": [{"sku": "000123", "price": 990}]}
+        before = len(menu_events())
+        cases = [
+            ("G1 missing bearer", VENUE, {"Authorization": ""}, 401),
+            ("G2 arbitrary bearer", VENUE, {"Authorization": "Bearer test-token"}, 401),
+            ("G2 legacy magic token", VENUE, {"Authorization": "Bearer expired-token"}, 401),
+            ("G4 A's token on B", VENUE_B, auth(a), 403),
+            ("G4 B's token on A", VENUE, auth(b), 403),
+        ]
+        for name, venue, headers, expected in cases:
+            for path in ("/items", "/items/inventory"):
+                body = item if path == "/items" else {"data": [{"sku": "000123", "inventory": 4}]}
+                self.assertEqual(call("PATCH", f"/venues/{venue}{path}", body, headers=headers)[0], expected, f"{name} {path}")
+        self.assertEqual(len(menu_events()), before, "rejected requests must not change state")
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items", item, headers=auth(a))[0], 202, "G3 venue A")
+        self.assertEqual(call("PATCH", f"/venues/{VENUE_B}/items", item, headers=auth(b))[0], 202, "G3 venue B")
+        events = menu_events()[before:]
+        self.assertEqual([e["venue_id"] for e in events], [VENUE, VENUE_B])
+
+        # R3 + G5: after a refresh the old bearer is dead, the new one works for the same venue only.
+        status, a2 = refresh(a["refresh_token"])
+        self.assertEqual(status, 200)
+        self.assertEqual(jwt_payload(a2["access_token"])["integration"]["venue_id"], VENUE, "R6")
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items", item, headers=auth(a))[0], 401, "R3")
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items", item, headers=auth(a2))[0], 202, "G5")
+        self.assertEqual(call("PATCH", f"/venues/{VENUE_B}/items", item, headers=auth(a2))[0], 403, "G5")
+
+    def test_concurrent_refresh_has_exactly_one_winner(self):
+        tokens = onboard(VENUE)
+        results, lock = [], threading.Lock()
+        barrier = threading.Barrier(8)
+
+        def worker():
+            barrier.wait()
+            outcome = refresh(tokens["refresh_token"])
+            with lock:
+                results.append(outcome)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        winners = [body for status, body in results if status == 200]
+        self.assertEqual(len(winners), 1, "R5: exactly one refresh commits")
+        self.assertTrue(all(status == 400 and body["error"] == "invalid_grant" for status, body in results if status != 200))
+        # Wolt profile: the losers were reuses, so the winner's pair is revoked (R4).
+        self.assertEqual(refresh(winners[0]["refresh_token"])[0], 400)
 
     def test_expired_token_is_rejected(self):
         status, body = call("GET", "/v2/orders/6710a1000000000000000001", headers={"Authorization": "Bearer expired-token"})
@@ -357,10 +459,11 @@ class WoltTwinTest(unittest.TestCase):
         self.assertEqual(export["request_id"], req["request_id"])
         self.assertEqual(export["menu"], menu)
 
-        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items", {"data": [{"external_id": "1", "sku": "1", "enabled": False}]})[0], 400)
-        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items", {"data": [{"external_id": "1", "enabled": False}]})[0], 202)
-        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items/inventory", {"data": [{"gtin": "1", "inventory": None}]})[0], 400)
-        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items/inventory", {"data": [{"gtin": "1", "inventory": 3}]})[0], 202)
+        venue = auth(onboard(VENUE))
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items", {"data": [{"external_id": "1", "sku": "1", "enabled": False}]}, headers=venue)[0], 400)
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items", {"data": [{"external_id": "1", "enabled": False}]}, headers=venue)[0], 202)
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items/inventory", {"data": [{"gtin": "1", "inventory": None}]}, headers=venue)[0], 400)
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items/inventory", {"data": [{"gtin": "1", "inventory": 3}]}, headers=venue)[0], 202)
         self.assertEqual(call("PATCH", f"/venues/{VENUE}/options/values", {"data": [{"external_id": "TRUF", "enabled": False}]})[0], 202)
 
     # ── Wolt Drive ──

@@ -65,6 +65,7 @@ type Handler struct {
 	graphqlSubs     map[string]*graphql.SubscriptionHandler
 	oauthMu         sync.RWMutex
 	oauthHandlers   map[string]*oauth.Handler
+	oauthProviders  map[string]*oauth.Provider // by OAuth mock id, for auth guards
 	soapMu          sync.RWMutex
 	soapHandlers    map[string]*soap.Handler
 }
@@ -82,6 +83,7 @@ func NewHandler(store storage.MockStore) *Handler {
 		graphqlHandlers: make(map[string]*graphql.Handler),
 		graphqlSubs:     make(map[string]*graphql.SubscriptionHandler),
 		oauthHandlers:   make(map[string]*oauth.Handler),
+		oauthProviders:  make(map[string]*oauth.Provider),
 		soapHandlers:    make(map[string]*soap.Handler),
 	}
 	// Wire template engine so SSE responses can use template variables
@@ -260,6 +262,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) { //nolint:g
 
 		// Get path pattern captures from regex matching
 		pathPatternCaptures := matchResult.PathPatternCaptures
+
+		// Enforce the mock's auth guard before any response or state change
+		if match.HTTP != nil && match.HTTP.Auth != nil {
+			if statusCode = h.authorizeHTTP(w, r, match, pathParams); statusCode != 0 {
+				h.logRequest(startTime, r, headers, bodyBytes, matchedID, match.WorkspaceID, statusCode, nil)
+				return
+			}
+		}
 
 		// Check for SSE streaming response
 		if match.HTTP != nil && match.HTTP.SSE != nil {

@@ -290,6 +290,8 @@ type ExtendBinding struct {
 	// Response overrides the table's default response transforms for this binding.
 	// If nil, the table's default Response is used.
 	Response *ResponseTransform `json:"response,omitempty" yaml:"response,omitempty"`
+	// Auth guards the bound mock (see mock.HTTPAuth); replaces any guard it had.
+	Auth *mock.HTTPAuth `json:"auth,omitempty" yaml:"auth,omitempty"`
 }
 
 // CollectionMetadata contains metadata about a mock collection.

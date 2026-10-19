@@ -131,6 +131,12 @@ func (m *Mock) validateHTTP() error {
 		return &ValidationError{Field: "http.priority", Message: "priority must be >= 0"}
 	}
 
+	if m.HTTP.Auth != nil {
+		if err := m.HTTP.Auth.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
