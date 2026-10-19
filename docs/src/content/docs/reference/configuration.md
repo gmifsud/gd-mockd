@@ -1024,8 +1024,9 @@ tables:
 | `timestamps` | object | Timestamp format and field renaming |
 | `fields` | object | Field injection, hiding, renaming, and array wrapping |
 | `list` | object | List envelope customization (HTTP-specific) |
-| `create` | object | Create verb override (status code) |
+| `create` | object | Create verb override (status code, noBody) |
 | `delete` | object | Delete verb override (status, body, preserve) |
+| `custom` | object | Custom-operation binding override (status, body, noBody) |
 | `errors` | object | Error response format customization |
 
 #### Timestamps
@@ -1064,6 +1065,7 @@ tables:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `status` | integer | `201` | HTTP status code for create responses |
+| `noBody` | boolean | `false` | Send the status with an empty body |
 
 #### Delete (VerbOverride)
 
@@ -1072,6 +1074,16 @@ tables:
 | `status` | integer | `204` | HTTP status code for delete responses |
 | `body` | map | `nil` | Response body template. Supports `{{item.fieldName}}` substitution from the deleted item. |
 | `preserve` | boolean | `false` | Soft delete: return the configured response but keep the item in the store |
+
+#### Custom (VerbOverride)
+
+Applies to extend bindings with `action: custom`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `status` | integer | `200` | HTTP status code for a successful custom operation |
+| `body` | map | `nil` | Response body template. Supports `{{item.fieldName}}` substitution from the operation's response. |
+| `noBody` | boolean | `false` | Send the status with an empty body (always the case for `204`) |
 
 #### Errors (ErrorTransform)
 

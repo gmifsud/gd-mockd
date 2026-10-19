@@ -8,6 +8,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -181,7 +182,9 @@ func (h *Handler) handleBindingCreate(w http.ResponseWriter, r *http.Request, wo
 	responseData := stateful.TransformItem(result.Item.ToJSON(), responseCfg)
 	createStatus := stateful.TransformCreateStatus(responseCfg)
 	w.WriteHeader(createStatus)
-	_ = json.NewEncoder(w).Encode(responseData)
+	if responseCfg == nil || responseCfg.Create == nil || !responseCfg.Create.NoBody {
+		_ = json.NewEncoder(w).Encode(responseData)
+	}
 	return createStatus
 }
 
@@ -250,10 +253,19 @@ func (h *Handler) handleBindingDelete(w http.ResponseWriter, r *http.Request, wo
 // applying error transforms if configured.
 func (h *Handler) writeBindingError(w http.ResponseWriter, result *stateful.OperationResult, table, itemID string, responseCfg *config.ResponseTransform) int {
 	statusCode := bridgeStatusToHTTP(result.Status)
+	message := result.Error.Error()
+
+	// A validation error carries its own status (validate step errorStatus) and
+	// a message meant for the client (validate step errorMessage).
+	var ve *stateful.ValidationError
+	if errors.As(result.Error, &ve) {
+		statusCode = ve.StatusCode()
+		message = ve.Message
+	}
 
 	if responseCfg != nil && responseCfg.Errors != nil {
 		code := httpStatusToErrorCode(statusCode)
-		if transformed := stateful.TransformError(code, result.Error.Error(), table, itemID, "", responseCfg); transformed != nil {
+		if transformed := stateful.TransformError(code, message, table, itemID, "", responseCfg); transformed != nil {
 			w.WriteHeader(statusCode)
 			_ = json.NewEncoder(w).Encode(transformed)
 			return statusCode
@@ -355,17 +367,12 @@ func (h *Handler) handleBindingCustom(w http.ResponseWriter, r *http.Request, wo
 		return h.writeBindingError(w, result, binding.Table, "", responseCfg)
 	}
 
-	// Apply response transform if the custom operation returned an item
-	if result.Item != nil {
-		data := stateful.TransformItem(result.Item.ToJSON(), responseCfg)
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(data)
-		return http.StatusOK
+	status, body := stateful.TransformCustomResponse(result.Item, responseCfg)
+	w.WriteHeader(status)
+	if body != nil {
+		_ = json.NewEncoder(w).Encode(body)
 	}
-
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
-	return http.StatusOK
+	return status
 }
 
 // handleCustomOperation executes a registered custom operation via the Bridge.
@@ -408,6 +415,10 @@ func (h *Handler) handleCustomOperation(w http.ResponseWriter, r *http.Request, 
 			httpStatus = http.StatusNotFound
 		case stateful.ErrCodeValidation:
 			httpStatus = http.StatusBadRequest
+			var ve *stateful.ValidationError
+			if errors.As(result.Error, &ve) {
+				httpStatus = ve.StatusCode() // validate step errorStatus
+			}
 		case stateful.ErrCodeConflict:
 			httpStatus = http.StatusConflict
 		default:

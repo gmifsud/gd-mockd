@@ -392,6 +392,9 @@ type ResponseTransform struct {
 	Create *VerbOverride `json:"create,omitempty" yaml:"create,omitempty"`
 	// Delete overrides the default HTTP status code and body for delete operations (default: 204, no body).
 	Delete *VerbOverride `json:"delete,omitempty" yaml:"delete,omitempty"`
+	// Custom overrides the success status code and body for extend bindings with
+	// action: custom (default: 200 with the operation's response).
+	Custom *VerbOverride `json:"custom,omitempty" yaml:"custom,omitempty"`
 	// Errors customizes the shape of error responses for this resource.
 	// If nil, the default mockd error format is used.
 	Errors *ErrorTransform `json:"errors,omitempty" yaml:"errors,omitempty"`
@@ -460,6 +463,10 @@ type VerbOverride struct {
 	// When true, DELETE returns the configured response but the item remains in the store.
 	// Useful for APIs with soft-delete semantics or test environments.
 	Preserve bool `json:"preserve,omitempty" yaml:"preserve,omitempty"`
+	// NoBody sends the status code with an empty body (create and custom).
+	// Useful for action endpoints that answer 202 Accepted with no content.
+	// A 204 status always implies no body.
+	NoBody bool `json:"noBody,omitempty" yaml:"noBody,omitempty"`
 }
 
 // ErrorTransform customizes the shape of error responses for a stateful resource.

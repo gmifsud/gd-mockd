@@ -925,7 +925,8 @@
         "create": {
           "type": "object",
           "properties": {
-            "status": { "type": "integer", "description": "HTTP status for create (default: 201)" }
+            "status": { "type": "integer", "description": "HTTP status for create (default: 201)" },
+            "noBody": { "type": "boolean", "description": "Send the status with an empty body" }
           }
         },
         "delete": {
@@ -934,6 +935,15 @@
             "status": { "type": "integer", "description": "HTTP status for delete (default: 204)" },
             "body": { "type": "object", "additionalProperties": true, "description": "Custom delete response body (supports {{item.field}} templates)" },
             "preserve": { "type": "boolean", "description": "When true, the item is not removed from the store. DELETE returns the configured response but the data is preserved. Useful for soft-delete APIs." }
+          }
+        },
+        "custom": {
+          "type": "object",
+          "description": "Success response for extend bindings with action: custom",
+          "properties": {
+            "status": { "type": "integer", "description": "HTTP status for a successful custom operation (default: 200)" },
+            "body": { "type": "object", "additionalProperties": true, "description": "Custom response body (supports {{item.field}} templates against the operation result)" },
+            "noBody": { "type": "boolean", "description": "Send the status with an empty body (implied by 204)" }
           }
         },
         "errors": {

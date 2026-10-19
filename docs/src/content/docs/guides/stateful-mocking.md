@@ -1530,7 +1530,7 @@ response:
 
 ### Verb Overrides
 
-Customize the HTTP status code and response body for create and delete operations.
+Customize the HTTP status code and response body for create, delete, and custom operations.
 
 #### Create Override
 
@@ -1545,6 +1545,7 @@ response:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `status` | integer | `201` | HTTP status code for create responses |
+| `noBody` | boolean | `false` | Send the status with an empty body |
 
 #### Delete Override
 
@@ -1584,6 +1585,32 @@ When you `DELETE /v1/customers/cus_123`, this returns:
 The `{{item.fieldName}}` syntax substitutes values from the item being deleted. The item data is read before the delete action, so all fields are available for template substitution. Only string values in the body template are processed for `{{item.*}}` patterns — non-string values (booleans, numbers) are returned as-is.
 
 When `preserve: true`, the item remains in the table after the delete response is sent. This is useful for APIs that use soft-delete semantics where deleted resources can still be retrieved.
+
+#### Custom Override
+
+By default, an extend binding with `action: custom` returns HTTP 200 with the operation's `response`. Many APIs model state transitions as action endpoints that answer `202 Accepted` or `204 No Content` with no body:
+
+```yaml
+extend:
+  - mock: api.AcceptOrder          # PUT /orders/{orderId}/accept
+    table: orders
+    action: custom
+    operation: AcceptOrder
+    response:
+      custom:
+        status: 202
+        noBody: true
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `status` | integer | `200` | HTTP status code for a successful custom operation |
+| `body` | map | `nil` | Response body template (supports `{{item.fieldName}}` substitution from the operation's response) |
+| `noBody` | boolean | `false` | Send the status with an empty body. A `204` status always sends no body. |
+
+A binding-level `response` replaces the table's default response config, so repeat any `errors` transform you rely on (YAML anchors keep this short).
+
+Failures are unaffected by the override: a `validate` step that fails returns its `errorStatus` (default 400), and its `errorMessage` is passed to the table's error transform as the `message` field.
 
 ### Error Transforms
 

@@ -160,6 +160,48 @@ func TransformDeleteResponse(item *ResourceItem, cfg *config.ResponseTransform) 
 	return status, body
 }
 
+// DefaultCustomStatus is the HTTP status for a successful custom operation binding.
+const DefaultCustomStatus = 200
+
+// TransformCustomResponse returns the HTTP status and body for a successful
+// custom operation invoked through an extend binding. A nil body means the
+// response carries no content.
+//
+// Without a custom override this is 200 with the operation's result (or
+// {"success": true} when there is none) — the historical behaviour.
+func TransformCustomResponse(item *ResourceItem, cfg *config.ResponseTransform) (int, interface{}) {
+	var itemData map[string]interface{}
+	if item != nil {
+		itemData = item.ToJSON()
+	}
+
+	var defaultBody interface{} = map[string]interface{}{"success": true}
+	if itemData != nil {
+		defaultBody = TransformItem(itemData, cfg)
+	}
+
+	if cfg == nil || cfg.Custom == nil {
+		return DefaultCustomStatus, defaultBody
+	}
+
+	status := cfg.Custom.Status
+	if status == 0 {
+		status = DefaultCustomStatus
+	}
+	if cfg.Custom.NoBody || status == 204 {
+		return status, nil
+	}
+	if cfg.Custom.Body == nil {
+		return status, defaultBody
+	}
+
+	body := make(map[string]interface{}, len(cfg.Custom.Body))
+	for key, val := range cfg.Custom.Body {
+		body[key] = resolveTemplateValue(val, itemData)
+	}
+	return status, body
+}
+
 // TransformCreateStatus returns the HTTP status code for create operations.
 // If cfg is nil or has no create override, returns 201 — current behavior.
 func TransformCreateStatus(cfg *config.ResponseTransform) int {

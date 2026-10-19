@@ -2683,3 +2683,192 @@ func TestHandleCustomOperation_Success(t *testing.T) {
 		t.Errorf("expected message='Hello Alice', got %v", body["message"])
 	}
 }
+
+// ── custom-binding status and error mapping ─────────────────────────────────
+
+// newCustomBindingHandler wires a bridge with an "orders" table and a custom
+// operation that only lets "received" orders move to "production".
+func newCustomBindingHandler(t *testing.T) (*Handler, *stateful.Bridge) {
+	t.Helper()
+	store := stateful.NewStateStore()
+	if err := store.Register("", &stateful.ResourceConfig{Name: "orders", IDField: "id"}); err != nil {
+		t.Fatalf("register table: %v", err)
+	}
+	br := stateful.NewBridge(store)
+	for _, seed := range []map[string]interface{}{
+		{"id": "o-new", "status": "received"},
+		{"id": "o-done", "status": "delivered"},
+	} {
+		if res := br.Execute(context.Background(), &stateful.OperationRequest{
+			Resource: "orders", Action: stateful.ActionCreate, Data: seed,
+		}); res.Error != nil {
+			t.Fatalf("seed: %v", res.Error)
+		}
+	}
+	br.RegisterCustomOperation("", "AcceptOrder", &stateful.CustomOperation{
+		Name: "AcceptOrder",
+		Steps: []stateful.Step{
+			{Type: stateful.StepRead, Resource: "orders", ID: "input.orderId", As: "order"},
+			{
+				Type:         stateful.StepValidate,
+				Condition:    `order.status == "received"`,
+				ErrorMessage: "ORDER_NOT_ACCEPTABLE",
+				ErrorStatus:  http.StatusConflict,
+			},
+			{Type: stateful.StepUpdate, Resource: "orders", ID: "input.orderId", Set: map[string]string{"status": `"production"`}},
+		},
+		Response: map[string]string{"id": "input.orderId"},
+	})
+	return &Handler{log: slog.Default(), statefulBridge: br}, br
+}
+
+func acceptBinding(resp *config.ResponseTransform) *mock.StatefulBinding {
+	b := &mock.StatefulBinding{Table: "orders", Action: "custom", Operation: "AcceptOrder"}
+	if resp != nil {
+		b.Response = &mock.StatefulBindingResponse{Transform: resp}
+	}
+	return b
+}
+
+func TestHandleBindingCustom_ValidateErrorStatusHonoured(t *testing.T) {
+	h, _ := newCustomBindingHandler(t)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/orders/o-done/accept", nil)
+	status := h.handleBindingCustom(w, req, "", acceptBinding(nil), map[string]string{"orderId": "o-done"}, nil, nil)
+
+	if status != http.StatusConflict || w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 from validate errorStatus, got return=%d recorded=%d body=%s", status, w.Code, w.Body.String())
+	}
+}
+
+func TestHandleBindingCustom_ValidateErrorMessageReachesErrorTransform(t *testing.T) {
+	h, _ := newCustomBindingHandler(t)
+	resp := &config.ResponseTransform{
+		Errors: &config.ErrorTransform{Fields: map[string]string{"message": "error_code"}},
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/orders/o-done/accept", nil)
+	h.handleBindingCustom(w, req, "", acceptBinding(resp), map[string]string{"orderId": "o-done"}, nil, resp)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", w.Code)
+	}
+	var body map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["error_code"] != "ORDER_NOT_ACCEPTABLE" {
+		t.Fatalf("expected the validate errorMessage verbatim, got %v", body["error_code"])
+	}
+}
+
+func TestHandleBindingCustom_NotFoundStill404(t *testing.T) {
+	h, _ := newCustomBindingHandler(t)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/orders/missing/accept", nil)
+	h.handleBindingCustom(w, req, "", acceptBinding(nil), map[string]string{"orderId": "missing"}, nil, nil)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown item, got %d", w.Code)
+	}
+}
+
+func TestHandleBindingCustom_DefaultSuccessIs200WithBody(t *testing.T) {
+	h, _ := newCustomBindingHandler(t)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/orders/o-new/accept", nil)
+	h.handleBindingCustom(w, req, "", acceptBinding(nil), map[string]string{"orderId": "o-new"}, nil, nil)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected default 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"o-new"`) {
+		t.Fatalf("expected operation response body, got %q", w.Body.String())
+	}
+}
+
+func TestHandleBindingCustom_StatusOverrideNoBody(t *testing.T) {
+	h, br := newCustomBindingHandler(t)
+	resp := &config.ResponseTransform{Custom: &config.VerbOverride{Status: http.StatusAccepted, NoBody: true}}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/orders/o-new/accept", nil)
+	status := h.handleBindingCustom(w, req, "", acceptBinding(resp), map[string]string{"orderId": "o-new"}, nil, resp)
+
+	if status != http.StatusAccepted || w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got return=%d recorded=%d", status, w.Code)
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("expected empty body, got %q", w.Body.String())
+	}
+	got := br.Execute(context.Background(), &stateful.OperationRequest{Resource: "orders", Action: stateful.ActionGet, ResourceID: "o-new"})
+	if got.Item == nil || got.Item.Data["status"] != "production" {
+		t.Fatalf("expected the operation to run, got %+v", got.Item)
+	}
+}
+
+func TestHandleBindingCustom_Status204ImpliesNoBody(t *testing.T) {
+	h, _ := newCustomBindingHandler(t)
+	resp := &config.ResponseTransform{Custom: &config.VerbOverride{Status: http.StatusNoContent}}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/orders/o-new/accept", nil)
+	h.handleBindingCustom(w, req, "", acceptBinding(resp), map[string]string{"orderId": "o-new"}, nil, resp)
+
+	if w.Code != http.StatusNoContent || w.Body.Len() != 0 {
+		t.Fatalf("expected 204 with no body, got %d %q", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleBindingCustom_BodyTemplateOverride(t *testing.T) {
+	h, _ := newCustomBindingHandler(t)
+	resp := &config.ResponseTransform{Custom: &config.VerbOverride{
+		Status: http.StatusAccepted,
+		Body:   map[string]interface{}{"accepted": "{{item.id}}", "ok": true},
+	}}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/orders/o-new/accept", nil)
+	h.handleBindingCustom(w, req, "", acceptBinding(resp), map[string]string{"orderId": "o-new"}, nil, resp)
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if w.Code != http.StatusAccepted || body["accepted"] != "o-new" || body["ok"] != true {
+		t.Fatalf("unexpected response %d %v", w.Code, body)
+	}
+}
+
+func TestHandleCustomOperation_ValidateErrorStatusHonoured(t *testing.T) {
+	h, _ := newCustomBindingHandler(t)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/accept", nil)
+	h.handleCustomOperation(w, req, "", "AcceptOrder", []byte(`{"orderId":"o-done"}`))
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 from validate errorStatus, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleBindingCreate_NoBody(t *testing.T) {
+	h, br := newCustomBindingHandler(t)
+	resp := &config.ResponseTransform{Create: &config.VerbOverride{Status: http.StatusAccepted, NoBody: true}}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/orders", strings.NewReader(`{"id":"o-x","status":"received"}`))
+	req.Header.Set("Content-Type", "application/json")
+	status := h.handleBindingCreate(w, req, "", "orders", nil, []byte(`{"id":"o-x","status":"received"}`), resp)
+
+	if status != http.StatusAccepted || w.Body.Len() != 0 {
+		t.Fatalf("expected 202 with no body, got %d %q", status, w.Body.String())
+	}
+	if got := br.Execute(context.Background(), &stateful.OperationRequest{Resource: "orders", Action: stateful.ActionGet, ResourceID: "o-x"}); got.Item == nil {
+		t.Fatal("expected item to be created")
+	}
+}
