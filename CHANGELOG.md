@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Binding-level `response` overrides were dropped by `mockd start -c`** — extend entries with their own `response` transform lost it on the admin → engine hop (the field was excluded from JSON), so the engine silently fell back to the table default. The override is now serialized with the mock and rehydrated by the engine.
 - **Custom operations could corrupt items with unencodable maps** — expr builtins such as `fromPairs()` return `map[interface{}]interface{}`; storing one made every later response for that item an empty `200` (the JSON encode error was dropped). Expression results are now converted to JSON-compatible values before they are stored or returned.
 - **`validate` step `errorStatus` ignored over HTTP** — custom operations reached through an extend binding or a `statefulOperation` mock always answered `400` when a `validate` step failed. They now return the configured `errorStatus` (e.g. `409` for an invalid state transition), and the step's `errorMessage` reaches the table's error transform as `message` instead of the wrapped `step N (validate) failed: …` text.
 

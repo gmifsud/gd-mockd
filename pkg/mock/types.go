@@ -290,14 +290,30 @@ type StatefulBinding struct {
 	// The operation is invoked via Bridge.Execute() with ActionCustom.
 	Operation string `json:"operation,omitempty" yaml:"operation,omitempty"`
 	// Response overrides the table's default response transforms for this binding.
-	// If nil, the table's default response config is used.
-	Response *StatefulBindingResponse `json:"-" yaml:"-"` // not serialized — resolved at load time
+	// If nil, the table's default response config is used. Resolved at config-load
+	// time from the extend entry; serialized so it survives the admin → engine hop.
+	Response *StatefulBindingResponse `json:"response,omitempty" yaml:"-"`
 }
 
 // StatefulBindingResponse holds the merged response transform for a binding.
-// This is a runtime-only type, not part of the config YAML.
+// It is not part of the config YAML (extend entries carry `response` instead).
+//
+// Transform is a *config.ResponseTransform when resolved in-process (typed as
+// interface{} to avoid an import cycle). After a JSON round-trip it holds the
+// raw json.RawMessage, which the engine decodes back into a ResponseTransform.
 type StatefulBindingResponse struct {
-	Transform interface{} `json:"-" yaml:"-"` // *config.ResponseTransform — avoid import cycle
+	Transform interface{} `json:"-" yaml:"-"`
+}
+
+// MarshalJSON encodes the transform itself.
+func (r StatefulBindingResponse) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.Transform)
+}
+
+// UnmarshalJSON keeps the raw transform for the engine to decode.
+func (r *StatefulBindingResponse) UnmarshalJSON(data []byte) error {
+	r.Transform = json.RawMessage(append([]byte(nil), data...))
+	return nil
 }
 
 // ClearConflictingResponseTypes nils out all response-type fields on an HTTPSpec

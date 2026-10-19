@@ -2872,3 +2872,38 @@ func TestHandleBindingCreate_NoBody(t *testing.T) {
 		t.Fatal("expected item to be created")
 	}
 }
+
+// Mocks reach the engine as JSON (admin → engine import). A binding-level
+// response override must survive that hop.
+func TestHandleStatefulBinding_BindingResponseSurvivesJSON(t *testing.T) {
+	h, _ := newCustomBindingHandler(t)
+
+	original := &mock.Mock{
+		Type: mock.TypeHTTP,
+		HTTP: &mock.HTTPSpec{
+			Matcher: &mock.HTTPMatcher{Method: http.MethodPut, Path: "/orders/{orderId}/accept"},
+			StatefulBinding: &mock.StatefulBinding{
+				Table: "orders", Action: "custom", Operation: "AcceptOrder",
+				Response: &mock.StatefulBindingResponse{Transform: &config.ResponseTransform{
+					Custom: &config.VerbOverride{Status: http.StatusAccepted, NoBody: true},
+				}},
+			},
+		},
+	}
+	raw, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var received mock.Mock
+	if err := json.Unmarshal(raw, &received); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/orders/o-new/accept", nil)
+	h.handleStatefulBinding(w, req, &received, nil, map[string]string{"orderId": "o-new"})
+
+	if w.Code != http.StatusAccepted || w.Body.Len() != 0 {
+		t.Fatalf("expected binding override (202, no body) after JSON round-trip, got %d %q", w.Code, w.Body.String())
+	}
+}

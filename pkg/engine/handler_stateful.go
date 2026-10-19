@@ -42,13 +42,7 @@ func (h *Handler) handleStatefulBinding(w http.ResponseWriter, r *http.Request, 
 	action := stateful.Action(binding.Action)
 
 	// Resolve response transform config: binding override > table default.
-	// The binding's Response.Transform was resolved at config-load time.
-	var responseCfg *config.ResponseTransform
-	if binding.Response != nil {
-		if transform, ok := binding.Response.Transform.(*config.ResponseTransform); ok {
-			responseCfg = transform
-		}
-	}
+	responseCfg := bindingResponseTransform(binding.Response)
 	// Fall back to the table's configured response transform
 	if responseCfg == nil {
 		responseCfg = h.statefulBridge.GetResponseConfig(workspaceID, binding.Table)
@@ -247,6 +241,30 @@ func (h *Handler) handleBindingDelete(w http.ResponseWriter, r *http.Request, wo
 		_ = json.NewEncoder(w).Encode(deleteBody)
 	}
 	return deleteStatus
+}
+
+// bindingResponseTransform returns a binding's response override, if any.
+// In-process it is already a *config.ResponseTransform; mocks that reached the
+// engine as JSON carry the raw transform, which is decoded here.
+func bindingResponseTransform(resp *mock.StatefulBindingResponse) *config.ResponseTransform {
+	if resp == nil {
+		return nil
+	}
+	switch t := resp.Transform.(type) {
+	case *config.ResponseTransform:
+		return t
+	case json.RawMessage:
+		if len(t) == 0 || string(t) == "null" {
+			return nil
+		}
+		var rt config.ResponseTransform
+		if err := json.Unmarshal(t, &rt); err != nil {
+			return nil
+		}
+		return &rt
+	default:
+		return nil
+	}
 }
 
 // writeBindingError maps a Bridge operation error to an HTTP error response,
