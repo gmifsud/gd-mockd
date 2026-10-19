@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Custom-operation success overrides** — extend bindings with `action: custom` accept `response.custom` (`status`, `body`, `noBody`), mirroring the existing `create`/`delete` overrides, so action endpoints can answer `202 Accepted` or `204 No Content` like the APIs they mock. `response.create.noBody` sends a create's status with an empty body.
+- **OAuth refresh-token rotation** — `oauth.rotateRefreshTokens: true` makes refresh tokens single-use (each refresh returns a new one; replaying the old one fails with `invalid_grant`), matching providers such as Wolt that rotate refresh tokens. Off by default.
 
 ### Fixed
 

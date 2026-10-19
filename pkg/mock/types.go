@@ -891,6 +891,10 @@ type OAuthSpec struct {
 
 	// Users are test users for resource owner password credentials flow
 	Users []OAuthUser `json:"users,omitempty" yaml:"users,omitempty"`
+
+	// RotateRefreshTokens makes refresh tokens single-use: each refresh_token
+	// grant invalidates the presented token and returns a new one.
+	RotateRefreshTokens bool `json:"rotateRefreshTokens,omitempty" yaml:"rotateRefreshTokens,omitempty"`
 }
 
 // OAuthClient defines an OAuth client configuration.

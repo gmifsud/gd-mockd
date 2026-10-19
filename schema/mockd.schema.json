@@ -553,6 +553,7 @@
         "issuer": { "type": "string", "description": "OAuth issuer URL" },
         "tokenExpiry": { "type": "string", "description": "Token expiry duration (e.g., '1h')" },
         "refreshExpiry": { "type": "string" },
+        "rotateRefreshTokens": { "type": "boolean", "description": "Make refresh tokens single-use: each refresh_token grant invalidates the presented token and returns a new one" },
         "defaultScopes": { "type": "array", "items": { "type": "string" } },
         "clients": {
           "type": "array",

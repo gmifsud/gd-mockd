@@ -768,6 +768,8 @@ func (mm *MockManager) registerOAuthMock(m *mock.Mock) error {
 		DefaultScopes: oauthSpec.DefaultScopes,
 		DefaultClaims: oauthSpec.DefaultClaims,
 		Enabled:       m.Enabled == nil || *m.Enabled,
+
+		RotateRefreshTokens: oauthSpec.RotateRefreshTokens,
 	}
 
 	// Set defaults if not specified

@@ -517,11 +517,30 @@ func (h *Handler) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// By default the refresh token is reusable. With rotation enabled it is
+	// single-use: consume it and hand out a replacement.
+	if h.provider.config.RotateRefreshTokens {
+		rotated, err := h.provider.GenerateRefreshToken()
+		if err != nil {
+			h.errorResponse(w, http.StatusInternalServerError, ErrServerError, "failed to generate refresh token")
+			return
+		}
+		h.provider.RevokeToken(refreshToken)
+		h.provider.StoreRefreshToken(&RefreshTokenData{
+			Token:     rotated,
+			ClientID:  clientID,
+			UserID:    refreshData.UserID,
+			Scope:     refreshData.Scope,
+			ExpiresAt: time.Now().Add(h.provider.refreshExpiry),
+		})
+		refreshToken = rotated
+	}
+
 	response := &TokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    int(h.provider.tokenExpiry.Seconds()),
-		RefreshToken: refreshToken, // Return same refresh token
+		RefreshToken: refreshToken,
 		Scope:        scope,
 	}
 
