@@ -1,0 +1,3806 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Wolt Wolt Drive API",
+    "version": "2026-06-29",
+    "description": "Generated from the official Wolt reference at https://developer.wolt.com/docs/api/wolt-drive (snapshot captured 2026-06-29 by github.com/Nirbel/wolt-mcp). Do not hand-edit; regenerate with tools/build_specs.py."
+  },
+  "externalDocs": {
+    "url": "https://developer.wolt.com/docs/api/wolt-drive"
+  },
+  "servers": [
+    {
+      "url": "https://daas-public-api.development.dev.woltapi.com",
+      "description": "Test"
+    },
+    {
+      "url": "https://daas-public-api.wolt.com",
+      "description": "Production"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/merchants/{merchantId}/available-venues": {
+      "post": {
+        "operationId": "available-venues",
+        "summary": "Get available venues",
+        "description": "When providing the dropoff location as the request, endpoint returns a sorted list of available venue names, their IDs, delivery prices and estimated delivery times.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "This is a **venueful** endpoint to request a list of available venues. Requesting available venues is an additional step that can simplify the process of filtering available venues for delivery. \n",
+                  "type": "array",
+                  "items": {
+                    "description": "Single available venue, with delivery fee and pre-estimates from this location",
+                    "type": "object",
+                    "properties": {
+                      "pickup": {
+                        "description": "Location of the pickup.",
+                        "type": "object",
+                        "properties": {
+                          "venue_id": {
+                            "type": "string",
+                            "description": "Wolt venue ID."
+                          },
+                          "name": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "lang": {
+                                  "description": "Language of venue name.",
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "description": "Venue name",
+                                  "type": "string"
+                                }
+                              },
+                              "title": "VenueName"
+                            },
+                            "description": "List of venue's localized names."
+                          },
+                          "location": {
+                            "type": "object",
+                            "description": "Venue location, as it's configured in Wolt's system.",
+                            "properties": {
+                              "formatted_address": {
+                                "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                                "type": "string"
+                              },
+                              "coordinates": {
+                                "description": "Coordinates for the optional location.",
+                                "type": "object",
+                                "properties": {
+                                  "lat": {
+                                    "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                    "type": "number",
+                                    "format": "double"
+                                  },
+                                  "lon": {
+                                    "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                    "type": "number",
+                                    "format": "double"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "fee": {
+                        "description": "Delivery fee",
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "description": "Fee presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                            "type": "integer"
+                          },
+                          "currency": {
+                            "description": "Three-letter ISO 4217 currency code.",
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "pre_estimate": {
+                        "description": "Pre-estimates for delivery time",
+                        "type": "object",
+                        "properties": {
+                          "pickup_minutes": {
+                            "type": "integer",
+                            "description": "Pre-estimated time from delivery creation to pickup, not including minimum preparation time. Light model."
+                          },
+                          "delivery_minutes": {
+                            "type": "integer",
+                            "description": "Pre-estimated time from pickup to delivery completion. Light model."
+                          },
+                          "total_minutes": {
+                            "description": "Pre-estimated time for whole delivery process. ML model.",
+                            "type": "object",
+                            "properties": {
+                              "min": {
+                                "description": "Estimated minimum time for delivery.",
+                                "type": "integer"
+                              },
+                              "mean": {
+                                "description": "Estimeated mean time for delivery.",
+                                "type": "integer"
+                              },
+                              "max": {
+                                "description": "Estimated maximum time for delivery",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "scheduled_dropoff_time": {
+                        "description": "Scheduled dropoff time",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "example": [
+                    {
+                      "pickup": {
+                        "venue_id": "string",
+                        "name": [
+                          {
+                            "lang": "fi",
+                            "value": "string"
+                          }
+                        ],
+                        "location": {
+                          "formatted_address": "string",
+                          "coordinates": {
+                            "lat": 0,
+                            "lon": 0
+                          }
+                        }
+                      },
+                      "fee": {
+                        "amount": 0,
+                        "currency": "string"
+                      },
+                      "pre-estimate": {
+                        "pickup_minutes": 0,
+                        "delivery_minutes": 0,
+                        "total_minutes": {
+                          "min": 0,
+                          "mean": 0,
+                          "max": 0
+                        }
+                      },
+                      "scheduled_dropoff_time": "string"
+                    }
+                  ],
+                  "title": "Available Venues"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "B2B_CONFIG_NOT_FOUND",
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "CORPORATE_PAYMENT_METHOD_NOT_FOUND",
+                        "DAAS_ORDER_NOT_FOUND",
+                        "DELIVERY_AREA_CLOSED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_CONFIG_MISSING_PRICING",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_AUTH_TOKEN",
+                        "INVALID_DROPOFF_ADDRESS",
+                        "INVALID_PAYLOAD",
+                        "INVALID_PICKUP_ADDRESS",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MERCHANT_NOT_FOUND",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS",
+                        "SHIPMENT_PROMISE_NOT_FOUND",
+                        "VENUE_CLOSED",
+                        "VENUE_NOT_FOUND",
+                        "VENUE_ORDER_LIMIT_EXCEEDED",
+                        "WEBHOOK_NOT_FOUND"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuefulDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Unauthorized",
+                      "type": "string",
+                      "enum": [
+                        "Unauthorized"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "title": "UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "B2B_CONFIG_NOT_FOUND",
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "CORPORATE_PAYMENT_METHOD_NOT_FOUND",
+                        "DAAS_ORDER_NOT_FOUND",
+                        "DELIVERY_AREA_CLOSED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_CONFIG_MISSING_PRICING",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_AUTH_TOKEN",
+                        "INVALID_DROPOFF_ADDRESS",
+                        "INVALID_PAYLOAD",
+                        "INVALID_PICKUP_ADDRESS",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MERCHANT_NOT_FOUND",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS",
+                        "SHIPMENT_PROMISE_NOT_FOUND",
+                        "VENUE_CLOSED",
+                        "VENUE_NOT_FOUND",
+                        "VENUE_ORDER_LIMIT_EXCEEDED",
+                        "WEBHOOK_NOT_FOUND"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuefulDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Validation error message.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "loc": {
+                            "description": "Line of code where the error occurred.",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "msg": {
+                            "description": "Validation error message.",
+                            "type": "string"
+                          },
+                          "type": {
+                            "description": "Type of the validation error.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "loc",
+                          "msg",
+                          "type"
+                        ],
+                        "title": "ValidationError"
+                      }
+                    }
+                  },
+                  "title": "HTTPValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the merchant."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dropoff": {
+                    "description": "The dropoff location for the delivery.",
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "description": "Location of the dropoff.",
+                        "type": "object",
+                        "properties": {
+                          "formatted_address": {
+                            "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                            "type": "string"
+                          },
+                          "coordinates": {
+                            "description": "Coordinates for the optional location.",
+                            "type": "object",
+                            "properties": {
+                              "lat": {
+                                "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              },
+                              "lon": {
+                                "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ]
+                  },
+                  "scheduled_dropoff_time": {
+                    "description": "Targeted dropoff time for delivery, if more than 60 minutes into future. Used to create a pre-order.",
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "contents": {
+                    "description": "Information of delivery contents. Used to have additional fees applied.",
+                    "type": "object",
+                    "properties": {
+                      "count": {
+                        "description": "Number of items.",
+                        "type": "integer"
+                      },
+                      "price": {
+                        "description": "Price of the parcel item. If available, include to enable more order automation\n",
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                            "type": "integer"
+                          },
+                          "currency": {
+                            "description": "Three-letter ISO 4217 currency code.",
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "dimensions": {
+                        "description": "Dimensions of the item. If available, include to enable more order automation.\n",
+                        "type": "object",
+                        "properties": {
+                          "weight_gram": {
+                            "description": "Parcel weight in grams.",
+                            "type": "integer"
+                          },
+                          "width_cm": {
+                            "description": "Parcel width in centimeters.",
+                            "type": "integer"
+                          },
+                          "height_cm": {
+                            "description": "Parcel height in centimeters.",
+                            "type": "integer"
+                          },
+                          "depth_cm": {
+                            "description": "Parcel depth in centimeters.",
+                            "type": "integer"
+                          }
+                        }
+                      },
+                      "options": {
+                        "description": "Item options. Prices added on top of top-level item.",
+                        "type": "array",
+                        "items": {
+                          "properties": {
+                            "description": {
+                              "description": "Option description",
+                              "type": "string"
+                            },
+                            "identifier": {
+                              "description": "Option identifier",
+                              "type": "string"
+                            },
+                            "count": {
+                              "description": "Option count",
+                              "minimum": 1,
+                              "default": 1,
+                              "type": "integer"
+                            },
+                            "price": {
+                              "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                  "type": "integer"
+                                },
+                                "currency": {
+                                  "description": "Three-letter ISO 4217 currency code.",
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "title": "ParcelOptionsArray",
+                          "type": "object"
+                        }
+                      }
+                    }
+                  },
+                  "cash": {
+                    "description": "Information of cash on delivery. Used to have additional fees applied.",
+                    "type": "object",
+                    "properties": {
+                      "amount_to_collect": {
+                        "description": "Amount of cash to receive (e.g. 60€ order, 20€ credit, customer needs to pay 40€). Value should also include the delivery cost. Price presented in whole numbers in the lowest denomination, commonly cents (example amount 40€ = \"4000\").\n",
+                        "type": "integer"
+                      },
+                      "amount_to_expect": {
+                        "description": "Amount of cash expected to have change for (e.g. customer has a 50€ bill). Price presented in whole numbers in the lowest denomination, commonly cents.\n",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "amount_to_collect"
+                    ]
+                  }
+                },
+                "required": [
+                  "dropoff"
+                ],
+                "title": "AvailableVenuesRequest"
+              }
+            }
+          },
+          "description": "Available venues payload"
+        }
+      }
+    },
+    "/merchants/{merchantId}/delivery-fee": {
+      "post": {
+        "operationId": "create-delivery-fee",
+        "summary": "Delivery fee request",
+        "description": "This is a **venueless** endpoint to request a delivery fee.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "This is a **venueless** endpoint to request a delivery fee estimate.\n\nLike shipment promise endpoint, the delivery fee endpoint is used to check availability of Wolt for a given time, determine the estimated price and delivery time. However as a venueless endpoint, delivery fee endpoint can be used without any predetermined venue address.\n\nNote that the endpoint cannot be used for address input validation. If the address does not exist, the endpoint will form a \"best guess\" of the location and resolve delivery availability using that address.\n\nSee [endpoint documentation](/docs/wolt-drive#venueless-endpoints) for more information.\n",
+                  "type": "object",
+                  "properties": {
+                    "created_at": {
+                      "description": "The date and time (ISO 8601 format) when the delivery fee was created.",
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "pickup": {
+                      "description": "The pickup location of the delivery.",
+                      "type": "object",
+                      "properties": {
+                        "location": {
+                          "description": "Location of the pickup.",
+                          "type": "object",
+                          "properties": {
+                            "formatted_address": {
+                              "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                              "type": "string"
+                            },
+                            "coordinates": {
+                              "description": "Coordinates for the optional location.",
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                },
+                                "lon": {
+                                  "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "location"
+                      ]
+                    },
+                    "dropoff": {
+                      "description": "The dropoff location of the delivery.",
+                      "type": "object",
+                      "properties": {
+                        "location": {
+                          "description": "Location of the dropoff.",
+                          "type": "object",
+                          "properties": {
+                            "formatted_address": {
+                              "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                              "type": "string"
+                            },
+                            "coordinates": {
+                              "description": "Coordinates for the optional location.",
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                },
+                                "lon": {
+                                  "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "location"
+                      ]
+                    },
+                    "fee": {
+                      "description": "Delivery fee on the requested delivery.",
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "description": "Fee presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "description": "Three-letter ISO 4217 currency code.",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "time_estimate_minutes": {
+                      "description": "Total estimated time for delivery.\n",
+                      "type": "integer"
+                    },
+                    "scheduled_dropoff_time": {
+                      "description": "The date and time (ISO 8601 format) when the order is scheduled to be dropped off.",
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "example": {
+                    "created_at": "2020-01-30T10:00:13.123Z",
+                    "pickup": {
+                      "location": {
+                        "formatted_address": "string",
+                        "coordinates": {
+                          "lat": 0,
+                          "lon": 0
+                        }
+                      }
+                    },
+                    "dropoff": {
+                      "location": {
+                        "formatted_address": "string",
+                        "coordinates": {
+                          "lat": 0,
+                          "lon": 0
+                        }
+                      }
+                    },
+                    "fee": {
+                      "amount": 0,
+                      "currency": "string"
+                    },
+                    "time_estimate_minutes": 0,
+                    "scheduled_dropoff_time": "2020-01-30T10:00:13.123Z"
+                  },
+                  "required": [
+                    "created_at",
+                    "pickup",
+                    "dropoff",
+                    "fee"
+                  ],
+                  "title": "Delivery fee"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_DISTANCE_TOO_BIG",
+                        "DELIVERY_NOT_ENABLED_FOR_DELIVERY_AREA",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "DUPLICATE_ORDER",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_KEY",
+                        "INVALID_PAYLOAD",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MISSING_DROPOFF_LOCATION",
+                        "MISSING_MERCHANT_CONFIGURATION",
+                        "MISSING_PICKUP_LOCATION",
+                        "PICKUP_OUTSIDE_DELIVERY_AREA",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Descriptive reason for error",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuelessDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Unauthorized",
+                      "type": "string",
+                      "enum": [
+                        "Unauthorized"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "title": "UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "B2B_CONFIG_NOT_FOUND",
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "CORPORATE_PAYMENT_METHOD_NOT_FOUND",
+                        "DAAS_ORDER_NOT_FOUND",
+                        "DELIVERY_AREA_CLOSED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_CONFIG_MISSING_PRICING",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_AUTH_TOKEN",
+                        "INVALID_DROPOFF_ADDRESS",
+                        "INVALID_PAYLOAD",
+                        "INVALID_PICKUP_ADDRESS",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MERCHANT_NOT_FOUND",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS",
+                        "SHIPMENT_PROMISE_NOT_FOUND",
+                        "VENUE_CLOSED",
+                        "VENUE_NOT_FOUND",
+                        "VENUE_ORDER_LIMIT_EXCEEDED",
+                        "WEBHOOK_NOT_FOUND"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuefulDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Validation error message.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "loc": {
+                            "description": "Line of code where the error occurred.",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "msg": {
+                            "description": "Validation error message.",
+                            "type": "string"
+                          },
+                          "type": {
+                            "description": "Type of the validation error.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "loc",
+                          "msg",
+                          "type"
+                        ],
+                        "title": "ValidationError"
+                      }
+                    }
+                  },
+                  "title": "HTTPValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the merchant."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pickup": {
+                    "description": "The pickup location of the delivery.",
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "description": "Location of the pickup.",
+                        "type": "object",
+                        "properties": {
+                          "formatted_address": {
+                            "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                            "type": "string"
+                          },
+                          "coordinates": {
+                            "description": "Coordinates for the optional location.",
+                            "type": "object",
+                            "properties": {
+                              "lat": {
+                                "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              },
+                              "lon": {
+                                "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ]
+                  },
+                  "dropoff": {
+                    "description": "The dropoff location of the delivery.",
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "description": "Location of the dropoff.",
+                        "type": "object",
+                        "properties": {
+                          "formatted_address": {
+                            "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                            "type": "string"
+                          },
+                          "coordinates": {
+                            "description": "Coordinates for the optional location.",
+                            "type": "object",
+                            "properties": {
+                              "lat": {
+                                "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              },
+                              "lon": {
+                                "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ]
+                  },
+                  "scheduled_dropoff_time": {
+                    "description": "The date and time (ISO 8601 format) when the order is scheduled to be dropped off.\nThe functionality is further explained under [use cases](/docs/wolt-drive#use-cases).",
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "contents": {
+                    "description": "Parcels included in the delivery.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "description": "Number of items.",
+                          "type": "integer"
+                        },
+                        "description": {
+                          "description": "Description of the item, eg. \"Burger\".\n",
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "description": "Any kind of reference to item, for example GUID.\n",
+                          "type": "string"
+                        },
+                        "tags": {
+                          "description": "List of the \"features\" of the parcel. Tag is visible in courier application.",
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "alcohol",
+                              "medicine",
+                              "tobacco"
+                            ],
+                            "title": "TagV1"
+                          }
+                        },
+                        "price": {
+                          "description": "Price of the parcel item. If available, include to enable more order automation\n",
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                              "type": "integer"
+                            },
+                            "currency": {
+                              "description": "Three-letter ISO 4217 currency code.",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "id_check_required": {
+                          "description": "Defines whether ID check is required. Enable to ask the courier partner to verify customer identity.",
+                          "type": "boolean"
+                        },
+                        "dimensions": {
+                          "description": "Dimensions of the item. If available, include to enable more order automation.\n",
+                          "type": "object",
+                          "properties": {
+                            "weight_gram": {
+                              "description": "Parcel weight in grams.",
+                              "type": "integer"
+                            },
+                            "width_cm": {
+                              "description": "Parcel width in centimeters.",
+                              "type": "integer"
+                            },
+                            "height_cm": {
+                              "description": "Parcel height in centimeters.",
+                              "type": "integer"
+                            },
+                            "depth_cm": {
+                              "description": "Parcel depth in centimeters.",
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "description",
+                        "identifier",
+                        "tags"
+                      ],
+                      "title": "Contents"
+                    }
+                  },
+                  "cash": {
+                    "description": "_Supported in some markets_. Check with your Wolt Drive contact if cash is included in your contract. Including this payload will enable cash on delivery, and will result in error if cash is not enabled on your account.",
+                    "type": "object",
+                    "properties": {
+                      "amount_to_collect": {
+                        "description": "Amount of cash to receive (e.g. 60€ order, 20€ credit, customer needs to pay 40€). Value should also include the delivery cost. Price presented in whole numbers in the lowest denomination, commonly cents (example amount 40€ = \"4000\").\n",
+                        "type": "integer"
+                      },
+                      "amount_to_expect": {
+                        "description": "Amount of cash expected to have change for (e.g. customer has a 50€ bill). Price presented in whole numbers in the lowest denomination, commonly cents.\n",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "amount_to_collect"
+                    ]
+                  }
+                },
+                "required": [
+                  "pickup",
+                  "dropoff"
+                ],
+                "title": "DeliveryFeeRequest"
+              }
+            }
+          },
+          "description": "Create delivery fee payload."
+        }
+      }
+    },
+    "/merchants/{merchantId}/delivery-order": {
+      "post": {
+        "operationId": "create-delivery-order",
+        "summary": "Create delivery order",
+        "description": "This is a **venueless** endpoint to request a delivery.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "This is a **venueless** endpoint to request a delivery.\n\nThe delivery order endpoint is used to request a delivery when you have all required customer/order information and customer has “placed” their order. Venueless delivery endpoint requires merchant to include all relevant venue information every time a request is made.\n\nEndpoint does not require any data from other responses, but using delivery fee endpoint is recommended to use before delivery to ensure availability, delivery time and price.\n\nSee [endpoint documentation](/docs/wolt-drive#venueless-endpoints) for more information.\n",
+                  "type": "object",
+                  "properties": {
+                    "pickup": {
+                      "description": "The pickup location of the delivery order.",
+                      "type": "object",
+                      "properties": {
+                        "eta": {
+                          "description": "The date and time (ISO 8601 format) foo when the delivery order is scheduled to be picked up.",
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "location": {
+                          "description": "Location of the pickup.",
+                          "type": "object",
+                          "properties": {
+                            "coordinates": {
+                              "description": "Coordinates for the order location.",
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                },
+                                "lon": {
+                                  "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                }
+                              }
+                            },
+                            "formatted_address": {
+                              "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "comment": {
+                          "description": "Any additional information related to pickup in a free text form.",
+                          "type": "string"
+                        },
+                        "contact_details": {
+                          "description": "Contact details of the sender.",
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "description": "Name for contact.",
+                              "type": "string"
+                            },
+                            "phone_number": {
+                              "description": "Phone number for the contact with country code and leading plus symbol.",
+                              "type": "string"
+                            },
+                            "send_tracking_link_sms": {
+                              "description": "Send a pre-defined SMS with an order tracking link to the provided phone_number",
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "phone_number",
+                            "send_tracking_link_sms"
+                          ]
+                        },
+                        "display_name": {
+                          "description": "A display name for pickup location, e.g. venue name.",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "dropoff": {
+                      "description": "The dropoff location of the delivery order.",
+                      "type": "object",
+                      "properties": {
+                        "eta": {
+                          "description": "The date and time (ISO 8601 format) foo when the delivery order is scheduled to be dropped off.",
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "location": {
+                          "description": "Location of the dropoff.",
+                          "type": "object",
+                          "properties": {
+                            "coordinates": {
+                              "description": "Coordinates for the order location.",
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                },
+                                "lon": {
+                                  "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                }
+                              }
+                            },
+                            "formatted_address": {
+                              "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "comment": {
+                          "description": "Any additional information related to dropoff in a free text form.",
+                          "type": "string"
+                        },
+                        "contact_details": {
+                          "description": "Contact details of the recipient.",
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "description": "Name for contact.",
+                              "type": "string"
+                            },
+                            "phone_number": {
+                              "description": "Phone number for the contact with country code and leading plus symbol.",
+                              "type": "string"
+                            },
+                            "send_tracking_link_sms": {
+                              "description": "Send a pre-defined SMS with an order tracking link to the provided phone_number",
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "phone_number",
+                            "send_tracking_link_sms"
+                          ]
+                        }
+                      }
+                    },
+                    "scheduled_dropoff_time": {
+                      "description": "The date and time (ISO 8601 format) when the order is scheduled to be dropped off.",
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "customer_support": {
+                      "description": "Customer support contact information which will be shown for the customer in the Wolt tracking UI.\n",
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "description": "Email address for customer support.\n\nThis field will be visible in the tracking view.\n",
+                          "type": "string"
+                        },
+                        "phone_number": {
+                          "description": "Phone number for customer support with country code and leading plus symbol.\n\nThis field will be visible in the tracking view.\n",
+                          "type": "string"
+                        },
+                        "url": {
+                          "description": "URL for the customer support.\n\nThis field will be visible in the tracking view.\n",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "is_no_contact": {
+                      "description": "Defines if the delivery should be no-contact delivery.",
+                      "type": "boolean"
+                    },
+                    "merchant_order_reference_id": {
+                      "description": "Any kind of external reference which links back to the delivery order.",
+                      "type": "string"
+                    },
+                    "contents": {
+                      "description": "Parcels included in the delivery.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "description": "Number of items.",
+                            "type": "integer"
+                          },
+                          "description": {
+                            "description": "Description of the item, eg. \"Burger\".\n",
+                            "type": "string"
+                          },
+                          "identifier": {
+                            "description": "Any kind of reference to item, for example GUID.\n",
+                            "type": "string"
+                          },
+                          "tags": {
+                            "description": "List of the \"features\" of the parcel. Tag is visible in courier application.",
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "alcohol",
+                                "medicine",
+                                "tobacco"
+                              ],
+                              "title": "TagV1"
+                            }
+                          },
+                          "price": {
+                            "description": "Price of the parcel item. If available, include to enable more order automation\n",
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                "type": "integer"
+                              },
+                              "currency": {
+                                "description": "Three-letter ISO 4217 currency code.",
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "id_check_required": {
+                            "description": "Defines whether ID check is required. Enable to ask the courier partner to verify customer identity.",
+                            "type": "boolean"
+                          },
+                          "dimensions": {
+                            "description": "Dimensions of the item. If available, include to enable more order automation.\n",
+                            "type": "object",
+                            "properties": {
+                              "weight_gram": {
+                                "description": "Parcel weight in grams.",
+                                "type": "integer"
+                              },
+                              "width_cm": {
+                                "description": "Parcel width in centimeters.",
+                                "type": "integer"
+                              },
+                              "height_cm": {
+                                "description": "Parcel height in centimeters.",
+                                "type": "integer"
+                              },
+                              "depth_cm": {
+                                "description": "Parcel depth in centimeters.",
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "count",
+                          "description",
+                          "identifier",
+                          "tags"
+                        ],
+                        "title": "Contents"
+                      }
+                    },
+                    "tips": {
+                      "description": "Any additional monetary pre-delivery tips for courier partner.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "description": "Type of the tip.",
+                            "type": "string",
+                            "enum": [
+                              "pre_delivery_courier_tip"
+                            ]
+                          },
+                          "price": {
+                            "description": "Sum of the tip.",
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                "type": "integer"
+                              },
+                              "currency": {
+                                "description": "Three-letter ISO 4217 currency code.",
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "price"
+                        ],
+                        "title": "Tip"
+                      }
+                    },
+                    "price": {
+                      "description": "Price of the delivery order.",
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "description": "Three-letter ISO 4217 currency code.",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "tracking": {
+                      "description": "Tracking information for the delivery order.",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "description": "Unique identifier for the tracking UI.",
+                          "type": "string"
+                        },
+                        "url": {
+                          "description": "URL for the tracking UI.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "url"
+                      ]
+                    },
+                    "wolt_order_reference_id": {
+                      "description": "Unique identifier for referencing the order.",
+                      "type": "string"
+                    },
+                    "min_preparation_time_minutes": {
+                      "description": "Minimum preparation time in minutes that the venue needs for preparing the order.\n\nThe functionality is further explained under [use cases](/docs/wolt-drive#use-cases).\n",
+                      "type": "integer"
+                    },
+                    "order_number": {
+                      "description": "A short reference which links back to the delivery order.\n\nSuggested to be 5 chars or under. If present, is shown to courier partner instead of `merchant_order_reference_id`.\n",
+                      "type": "string"
+                    }
+                  },
+                  "example": {
+                    "pickup": {
+                      "eta": "2020-01-30T10:00:13.123Z",
+                      "location": {
+                        "formatted_address": "string",
+                        "coordinates": {
+                          "lat": 0,
+                          "lon": 0
+                        }
+                      },
+                      "comment": "string",
+                      "contact_details": {
+                        "name": "string",
+                        "phone_number": "string",
+                        "send_tracking_link_sms": true
+                      },
+                      "display_name": "string"
+                    },
+                    "dropoff": {
+                      "eta": "2020-01-30T10:00:13.123Z",
+                      "location": {
+                        "formatted_address": "string",
+                        "coordinates": {
+                          "lat": 0,
+                          "lon": 0
+                        }
+                      },
+                      "comment": "string",
+                      "contact_details": {
+                        "name": "string",
+                        "phone_number": "string",
+                        "send_tracking_link_sms": true
+                      }
+                    },
+                    "scheduled_dropoff_time": "2020-01-30T10:00:13.123Z",
+                    "customer_support": {
+                      "email": "string"
+                    },
+                    "is_no_contact": true,
+                    "merchant_order_reference_id": "string",
+                    "contents": [
+                      {
+                        "count": 0,
+                        "description": "string",
+                        "identifier": "string",
+                        "tags": [
+                          "alcohol"
+                        ],
+                        "price": {
+                          "amount": 0,
+                          "currency": "string"
+                        },
+                        "dimensions": {
+                          "weight_gram": 0,
+                          "width_cm": 0,
+                          "height_cm": 0,
+                          "depth_cm": 0
+                        }
+                      }
+                    ],
+                    "tips": [
+                      {
+                        "type": "pre_delivery_courier_tip",
+                        "price": {
+                          "amount": 0,
+                          "currency": "string"
+                        }
+                      }
+                    ],
+                    "price": {
+                      "amount": 0,
+                      "currency": "string"
+                    },
+                    "tracking": {
+                      "id": "string",
+                      "url": "string"
+                    },
+                    "wolt_order_reference_id": "string",
+                    "min_preparation_time_minutes": 0,
+                    "order_number": "string"
+                  },
+                  "required": [
+                    "pickup",
+                    "dropoff",
+                    "customer_support",
+                    "is_no_contact",
+                    "contents",
+                    "tips",
+                    "price",
+                    "tracking",
+                    "wolt_order_reference_id",
+                    "min_preparation_time_minutes"
+                  ],
+                  "title": "Venueless delivery order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_DISTANCE_TOO_BIG",
+                        "DELIVERY_NOT_ENABLED_FOR_DELIVERY_AREA",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "DUPLICATE_ORDER",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_KEY",
+                        "INVALID_PAYLOAD",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MISSING_DROPOFF_LOCATION",
+                        "MISSING_MERCHANT_CONFIGURATION",
+                        "MISSING_PICKUP_LOCATION",
+                        "PICKUP_OUTSIDE_DELIVERY_AREA",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Descriptive reason for error",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuelessDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Unauthorized",
+                      "type": "string",
+                      "enum": [
+                        "Unauthorized"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "title": "UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "B2B_CONFIG_NOT_FOUND",
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "CORPORATE_PAYMENT_METHOD_NOT_FOUND",
+                        "DAAS_ORDER_NOT_FOUND",
+                        "DELIVERY_AREA_CLOSED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_CONFIG_MISSING_PRICING",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_AUTH_TOKEN",
+                        "INVALID_DROPOFF_ADDRESS",
+                        "INVALID_PAYLOAD",
+                        "INVALID_PICKUP_ADDRESS",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MERCHANT_NOT_FOUND",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS",
+                        "SHIPMENT_PROMISE_NOT_FOUND",
+                        "VENUE_CLOSED",
+                        "VENUE_NOT_FOUND",
+                        "VENUE_ORDER_LIMIT_EXCEEDED",
+                        "WEBHOOK_NOT_FOUND"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuefulDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Validation error message.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "loc": {
+                            "description": "Line of code where the error occurred.",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "msg": {
+                            "description": "Validation error message.",
+                            "type": "string"
+                          },
+                          "type": {
+                            "description": "Type of the validation error.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "loc",
+                          "msg",
+                          "type"
+                        ],
+                        "title": "ValidationError"
+                      }
+                    }
+                  },
+                  "title": "HTTPValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the merchant."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pickup": {
+                    "description": "The pickup location of the delivery order.",
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "description": "Location of the pickup.",
+                        "type": "object",
+                        "properties": {
+                          "coordinates": {
+                            "description": "Coordinates for the order location.",
+                            "type": "object",
+                            "properties": {
+                              "lat": {
+                                "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              },
+                              "lon": {
+                                "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              }
+                            }
+                          },
+                          "formatted_address": {
+                            "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "comment": {
+                        "description": "Any additional information related to pickup in a free text form. Displayed to the courier partner to help finding the venue/sender easier.",
+                        "type": "string"
+                      },
+                      "contact_details": {
+                        "description": "Contact details of the sender.",
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "description": "Name for contact.",
+                            "type": "string"
+                          },
+                          "phone_number": {
+                            "description": "Phone number for the contact with country code and leading plus symbol.",
+                            "type": "string"
+                          },
+                          "send_tracking_link_sms": {
+                            "description": "Send a pre-defined SMS with an order tracking link to the provided phone_number",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "phone_number",
+                          "send_tracking_link_sms"
+                        ]
+                      },
+                      "display_name": {
+                        "description": "A display name for pickup location, eg. venue name",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "location",
+                      "contact_details"
+                    ]
+                  },
+                  "dropoff": {
+                    "description": "The dropoff location of the delivery order.",
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "description": "Location of the dropoff.",
+                        "type": "object",
+                        "properties": {
+                          "coordinates": {
+                            "description": "Coordinates for the order location.",
+                            "type": "object",
+                            "properties": {
+                              "lat": {
+                                "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              },
+                              "lon": {
+                                "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              }
+                            }
+                          },
+                          "formatted_address": {
+                            "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "comment": {
+                        "description": "Any additional information related to pickup in a free text form. Displayed to the courier partner to help finding the venue/sender easier.",
+                        "type": "string"
+                      },
+                      "contact_details": {
+                        "description": "Contact details of the receiver.",
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "description": "Name for contact.",
+                            "type": "string"
+                          },
+                          "phone_number": {
+                            "description": "Phone number for the contact with country code and leading plus symbol.",
+                            "type": "string"
+                          },
+                          "send_tracking_link_sms": {
+                            "description": "Send a pre-defined SMS with an order tracking link to the provided phone_number",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "phone_number",
+                          "send_tracking_link_sms"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "location",
+                      "contact_details"
+                    ]
+                  },
+                  "customer_support": {
+                    "description": "Customer support contact information which will be shown for the customer in the Wolt tracking UI.\n\nAt least one of fields must be provided.\n",
+                    "type": "object",
+                    "properties": {
+                      "email": {
+                        "description": "Email address for customer support.\n\nThis field will be visible in the tracking view.\n",
+                        "type": "string"
+                      },
+                      "phone_number": {
+                        "description": "Phone number for customer support with country code and leading plus symbol.\n\nThis field will be visible in the tracking view.\n",
+                        "type": "string"
+                      },
+                      "url": {
+                        "description": "URL for the customer support.\n\nThis field will be visible in the tracking view.\n",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "merchant_order_reference_id": {
+                    "description": "Any kind of reference-id which links back to the delivery order.",
+                    "type": "string"
+                  },
+                  "is_no_contact": {
+                    "description": "Defines if the delivery should be no-contact delivery.",
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "contents": {
+                    "description": "Parcels included in the delivery.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "description": "Number of items.",
+                          "type": "integer"
+                        },
+                        "description": {
+                          "description": "Description of the item, eg. \"Burger\".\n",
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "description": "Any kind of reference to item, for example GUID.\n",
+                          "type": "string"
+                        },
+                        "tags": {
+                          "description": "List of the \"features\" of the parcel. Tag is visible in courier application.",
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "alcohol",
+                              "medicine",
+                              "tobacco"
+                            ],
+                            "title": "TagV1"
+                          }
+                        },
+                        "price": {
+                          "description": "Price of the parcel item. If available, include to enable more order automation\n",
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                              "type": "integer"
+                            },
+                            "currency": {
+                              "description": "Three-letter ISO 4217 currency code.",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "id_check_required": {
+                          "description": "Defines whether ID check is required. Enable to ask the courier partner to verify customer identity.",
+                          "type": "boolean"
+                        },
+                        "dimensions": {
+                          "description": "Dimensions of the item. If available, include to enable more order automation.\n",
+                          "type": "object",
+                          "properties": {
+                            "weight_gram": {
+                              "description": "Parcel weight in grams.",
+                              "type": "integer"
+                            },
+                            "width_cm": {
+                              "description": "Parcel width in centimeters.",
+                              "type": "integer"
+                            },
+                            "height_cm": {
+                              "description": "Parcel height in centimeters.",
+                              "type": "integer"
+                            },
+                            "depth_cm": {
+                              "description": "Parcel depth in centimeters.",
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "description",
+                        "identifier",
+                        "tags"
+                      ],
+                      "title": "Contents"
+                    }
+                  },
+                  "tips": {
+                    "description": "Any additional monetary pre-delivery tips for courier partner.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "description": "Type of the tip.",
+                          "type": "string",
+                          "enum": [
+                            "pre_delivery_courier_tip"
+                          ]
+                        },
+                        "price": {
+                          "description": "Sum of the tip.",
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                              "type": "integer"
+                            },
+                            "currency": {
+                              "description": "Three-letter ISO 4217 currency code.",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "price"
+                      ],
+                      "title": "Tip"
+                    }
+                  },
+                  "min_preparation_time_minutes": {
+                    "description": "Minimum preparation time in minutes that the venue needs for preparing the order.\n\nThe functionality is further explained under [use cases](/docs/wolt-drive#use-cases).\n",
+                    "type": "integer",
+                    "default": 30,
+                    "maximum": 60,
+                    "minimum": 0
+                  },
+                  "scheduled_dropoff_time": {
+                    "description": "The date and time (ISO 8601 format) when the order is scheduled to be dropped off.\nThe functionality is further explained under [use cases](/docs/wolt-drive#use-cases).",
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "order_number": {
+                    "description": "A short reference which links back to the delivery order.\n\nSuggested to be 5 chars or under. If present, is shown to courier partner instead of `merchant_order_reference_id`.\n",
+                    "type": "string"
+                  },
+                  "cash": {
+                    "description": "_Supported in some markets_. Check with your Wolt Drive contact if cash is included in your contract. Including this payload will enable cash on delivery, and will result in error if cash is not enabled on your account.",
+                    "type": "object",
+                    "properties": {
+                      "amount_to_collect": {
+                        "description": "Amount of cash to receive (e.g. 60€ order, 20€ credit, customer needs to pay 40€). Value should also include the delivery cost. Price presented in whole numbers in the lowest denomination, commonly cents (example amount 40€ = \"4000\").\n",
+                        "type": "integer"
+                      },
+                      "amount_to_expect": {
+                        "description": "Amount of cash expected to have change for (e.g. customer has a 50€ bill). Price presented in whole numbers in the lowest denomination, commonly cents.\n",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "amount_to_collect"
+                    ]
+                  },
+                  "handshake_delivery": {
+                    "description": "_Supported in some regions_. Enables PIN verification on delivery. Check with your Wolt Drive contact if HSD is available. See [feature documentation](/docs/wolt-drive#delivery-handshake-verification).",
+                    "type": "object",
+                    "properties": {
+                      "is_required": {
+                        "description": "Enable PIN verification feature on the delivery. Not supported in all regions, ask your Wolt Drive contact before enabling.",
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "should_send_sms_to_dropoff_contact": {
+                        "description": "When enabled, Wolt will send a pre-defined SMS to recipient including the delivery PIN code. Disable only if PIN is communicated some other way.",
+                        "type": "boolean",
+                        "default": true
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "pickup",
+                  "dropoff",
+                  "is_no_contact",
+                  "contents",
+                  "tips",
+                  "min_preparation_time_minutes",
+                  "customer_support"
+                ],
+                "title": "DeliveryOrderRequest"
+              }
+            }
+          },
+          "description": "Create delivery order payload."
+        }
+      }
+    },
+    "/v1/venues/{venueId}/deliveries": {
+      "post": {
+        "operationId": "create-delivery",
+        "summary": "Create a delivery",
+        "description": "A **venueful** endpoint to create a delivery order.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "A **venueful** endpoint to create a delivery order. Response will include the detailed information for the delivery. See [endpoint documentation](/docs/wolt-drive#venueful-endpoints) for more information.",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Unique identifier for the delivery order response.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "Status of the delivery order.",
+                      "type": "string",
+                      "enum": [
+                        "INFO_RECEIVED"
+                      ]
+                    },
+                    "tracking": {
+                      "description": "Tracking information for the delivery order.",
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "description": "Unique identifier for the tracking UI.",
+                          "type": "string"
+                        },
+                        "url": {
+                          "description": "URL for the tracking UI.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "url"
+                      ]
+                    },
+                    "pickup": {
+                      "description": "The pickup location of the delivery order.",
+                      "type": "object",
+                      "properties": {
+                        "location": {
+                          "description": "Location of the pickup.",
+                          "type": "object",
+                          "properties": {
+                            "coordinates": {
+                              "description": "Coordinates for the location.",
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                },
+                                "lon": {
+                                  "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                }
+                              }
+                            },
+                            "formatted_address": {
+                              "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "coordinates"
+                          ]
+                        },
+                        "comment": {
+                          "description": "Any additional information related to pickup in a free text form.",
+                          "type": "string"
+                        },
+                        "options": {
+                          "description": "Additional information related to the pickup.",
+                          "type": "object",
+                          "properties": {
+                            "min_preparation_time_minutes": {
+                              "description": "Minimum time in minutes it takes to prepare the order for pickup.",
+                              "type": "integer",
+                              "default": 30,
+                              "maximum": 60,
+                              "minimum": 0
+                            }
+                          }
+                        },
+                        "eta": {
+                          "description": "The date and time (ISO 8601 format) foo when the delivery order is scheduled to be picked up.",
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "location",
+                        "eta"
+                      ]
+                    },
+                    "dropoff": {
+                      "description": "The dropoff location of the delivery order.",
+                      "type": "object",
+                      "properties": {
+                        "location": {
+                          "description": "Location of the dropoff.",
+                          "type": "object",
+                          "properties": {
+                            "coordinates": {
+                              "description": "Coordinates for the location.",
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                },
+                                "lon": {
+                                  "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                }
+                              }
+                            },
+                            "formatted_address": {
+                              "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "coordinates"
+                          ]
+                        },
+                        "comment": {
+                          "description": "Any additional information related to dropoff in a free text form.",
+                          "type": "string"
+                        },
+                        "options": {
+                          "description": "Additional information related to the dropoff.",
+                          "type": "object",
+                          "properties": {
+                            "is_no_contact": {
+                              "description": "Defines if the delivery should be no-contact delivery.",
+                              "type": "boolean",
+                              "default": false
+                            },
+                            "scheduled_time": {
+                              "description": "The date and time (ISO 8601 format) when the order is scheduled to be dropped off.",
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        "eta": {
+                          "description": "The date and time (ISO 8601 format) foo when the delivery order is scheduled to be dropped off. This will be `null` in scheduled dropoff case.",
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "location"
+                      ]
+                    },
+                    "price": {
+                      "description": "Price of the delivery order.",
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "description": "Three-letter ISO 4217 currency code.",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "recipient": {
+                      "description": "Details of the recipient who is going to receive the parcels.",
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "description": "Name of delivery recipient. Must be non-empty string.",
+                          "type": "string"
+                        },
+                        "phone_number": {
+                          "description": "Phone number for the contact with country code and leading plus symbol.",
+                          "type": "string"
+                        },
+                        "email": {
+                          "description": "Email address of delivery recipient.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "phone_number"
+                      ]
+                    },
+                    "parcels": {
+                      "description": "Parcels included in the delivery.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "dimensions": {
+                            "description": "Dimensions of the parcel item. If available, include to enable more order automation.\n",
+                            "type": "object",
+                            "properties": {
+                              "weight_gram": {
+                                "description": "Parcel weight in grams.",
+                                "type": "integer"
+                              },
+                              "width_cm": {
+                                "description": "Parcel width in centimeters.",
+                                "type": "integer"
+                              },
+                              "height_cm": {
+                                "description": "Parcel height in centimeters.",
+                                "type": "integer"
+                              },
+                              "depth_cm": {
+                                "description": "Parcel depth in centimeters.",
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          "price": {
+                            "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                "type": "integer"
+                              },
+                              "currency": {
+                                "description": "Three-letter ISO 4217 currency code.",
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "description": {
+                            "description": "Description of the parcel item, eg. \"Burger\".\n",
+                            "type": "string"
+                          },
+                          "identifier": {
+                            "description": "Any kind of reference to item, for example GUID.\n",
+                            "type": "string"
+                          },
+                          "dropoff_restrictions": {
+                            "description": "Used when sending eg. age-restricted products.",
+                            "type": "object",
+                            "properties": {
+                              "id_check_required": {
+                                "description": "Defines whether ID check is required. Enable to ask the courier partner to verify customer identity.",
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "tags": {
+                            "description": "List of the \"features\" of the parcel. Tag is visible in courier application. Used together with ID check requirement. Possible values \"medicine\", \"alcohol\" and \"tobacco\".",
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "alcohol",
+                                "medicine",
+                                "tobacco"
+                              ],
+                              "title": "TagV1"
+                            }
+                          },
+                          "count": {
+                            "description": "Number of items.",
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 1
+                          },
+                          "options": {
+                            "description": "List of \"options\" related to single parcel, for example items in a meal",
+                            "type": "array",
+                            "items": {
+                              "properties": {
+                                "description": {
+                                  "description": "Option description",
+                                  "type": "string"
+                                },
+                                "identifier": {
+                                  "description": "Option identifier",
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "description": "Option count",
+                                  "minimum": 1,
+                                  "default": 1,
+                                  "type": "integer"
+                                },
+                                "price": {
+                                  "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                                  "type": "object",
+                                  "properties": {
+                                    "amount": {
+                                      "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                      "type": "integer"
+                                    },
+                                    "currency": {
+                                      "description": "Three-letter ISO 4217 currency code.",
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              },
+                              "title": "ParcelOptionsArray",
+                              "type": "object"
+                            }
+                          }
+                        },
+                        "title": "ParcelV1"
+                      }
+                    },
+                    "customer_support": {
+                      "description": "Customer support contact information which will be shown for the customer in the Wolt tracking UI.\n",
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "description": "Email address for customer support.\n\nThis field will be visible in the tracking view.\n",
+                          "type": "string"
+                        },
+                        "phone_number": {
+                          "description": "Phone number for customer support with country code and leading plus symbol.\n\nThis field will be visible in the tracking view.\n",
+                          "type": "string"
+                        },
+                        "url": {
+                          "description": "URL for the customer support.\n\nThis field will be visible in the tracking view.\n",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "wolt_order_reference_id": {
+                      "description": "Unique identifier for referencing the Wolt order.",
+                      "type": "string"
+                    },
+                    "merchant_order_reference_id": {
+                      "description": "Any kind of external reference which links back to the delivery order.",
+                      "type": "string"
+                    },
+                    "tips": {
+                      "description": "Any additional monetary pre-delivery tips for courier partner.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "description": "Type of the tip.",
+                            "type": "string",
+                            "enum": [
+                              "pre_delivery_courier_tip"
+                            ]
+                          },
+                          "price": {
+                            "description": "Sum of the tip.",
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                "type": "integer"
+                              },
+                              "currency": {
+                                "description": "Three-letter ISO 4217 currency code.",
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "price"
+                        ],
+                        "title": "Tip"
+                      }
+                    },
+                    "order_number": {
+                      "description": "A short reference which links back to the delivery order.\n\nSuggested to be 5 chars or under. If present, is shown to courier partner instead of `merchant_order_reference_id`.\n",
+                      "type": "string"
+                    }
+                  },
+                  "example": {
+                    "id": "string",
+                    "status": "INFO_RECEIVED",
+                    "tracking": {
+                      "id": "string",
+                      "url": "string"
+                    },
+                    "pickup": {
+                      "location": {
+                        "coordinates": {
+                          "lat": 0,
+                          "lon": 0
+                        },
+                        "formatted_address": "string"
+                      },
+                      "comment": "string",
+                      "options": {
+                        "min_preparation_time_minutes": 30
+                      },
+                      "eta": "2023-01-23T14:21:00Z",
+                      "display_name": "string"
+                    },
+                    "dropoff": {
+                      "location": {
+                        "coordinates": {
+                          "lat": 0,
+                          "lon": 0
+                        },
+                        "formatted_address": "string"
+                      },
+                      "comment": "string",
+                      "options": {
+                        "is_no_contact": false,
+                        "scheduled_time": "2023-01-23T14:21:00Z"
+                      },
+                      "eta": "2023-01-23T14:21:00Z"
+                    },
+                    "price": {
+                      "amount": 0,
+                      "currency": "string"
+                    },
+                    "recipient": {
+                      "name": "string",
+                      "phone_number": "string",
+                      "email": "string"
+                    },
+                    "parcels": [
+                      {
+                        "dimensions": {
+                          "weight_gram": 0,
+                          "width_cm": 0,
+                          "height_cm": 0,
+                          "depth_cm": 0
+                        },
+                        "description": "string",
+                        "identifier": "string",
+                        "dropoff_restrictions": {
+                          "age_limit": 0,
+                          "identity_verification": {
+                            "name": "string"
+                          }
+                        },
+                        "tags": [
+                          "alcohol"
+                        ],
+                        "count": 1,
+                        "price": {
+                          "amount": 0,
+                          "currency": "string"
+                        }
+                      }
+                    ],
+                    "customer_support": {
+                      "url": "string",
+                      "email": "string",
+                      "phone_number": "string"
+                    },
+                    "wolt_order_reference_id": "string",
+                    "merchant_order_reference_id": "string",
+                    "tips": [
+                      {
+                        "type": "pre_delivery_courier_tip",
+                        "price": {
+                          "amount": 0,
+                          "currency": "string"
+                        }
+                      }
+                    ],
+                    "order_number": "string"
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "tracking",
+                    "pickup",
+                    "dropoff",
+                    "price",
+                    "recipient",
+                    "parcels",
+                    "customer_support"
+                  ],
+                  "title": "Venueful delivery order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "B2B_CONFIG_NOT_FOUND",
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "CORPORATE_PAYMENT_METHOD_NOT_FOUND",
+                        "DAAS_ORDER_NOT_FOUND",
+                        "DELIVERY_AREA_CLOSED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_CONFIG_MISSING_PRICING",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_AUTH_TOKEN",
+                        "INVALID_DROPOFF_ADDRESS",
+                        "INVALID_PAYLOAD",
+                        "INVALID_PICKUP_ADDRESS",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MERCHANT_NOT_FOUND",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS",
+                        "SHIPMENT_PROMISE_NOT_FOUND",
+                        "VENUE_CLOSED",
+                        "VENUE_NOT_FOUND",
+                        "VENUE_ORDER_LIMIT_EXCEEDED",
+                        "WEBHOOK_NOT_FOUND"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuefulDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Unauthorized",
+                      "type": "string",
+                      "enum": [
+                        "Unauthorized"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "title": "UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "B2B_CONFIG_NOT_FOUND",
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "CORPORATE_PAYMENT_METHOD_NOT_FOUND",
+                        "DAAS_ORDER_NOT_FOUND",
+                        "DELIVERY_AREA_CLOSED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_CONFIG_MISSING_PRICING",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_AUTH_TOKEN",
+                        "INVALID_DROPOFF_ADDRESS",
+                        "INVALID_PAYLOAD",
+                        "INVALID_PICKUP_ADDRESS",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MERCHANT_NOT_FOUND",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS",
+                        "SHIPMENT_PROMISE_NOT_FOUND",
+                        "VENUE_CLOSED",
+                        "VENUE_NOT_FOUND",
+                        "VENUE_ORDER_LIMIT_EXCEEDED",
+                        "WEBHOOK_NOT_FOUND"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuefulDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Validation error message.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "loc": {
+                            "description": "Line of code where the error occurred.",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "msg": {
+                            "description": "Validation error message.",
+                            "type": "string"
+                          },
+                          "type": {
+                            "description": "Type of the validation error.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "loc",
+                          "msg",
+                          "type"
+                        ],
+                        "title": "ValidationError"
+                      }
+                    }
+                  },
+                  "title": "HTTPValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pickup": {
+                    "description": "The pickup location for the delivery.",
+                    "type": "object",
+                    "properties": {
+                      "comment": {
+                        "description": "Any additional information related to pickup in a free text form. Displayed to the courier partner to help finding the recipient easier.",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "dropoff": {
+                    "description": "The dropoff location for the delivery.",
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "description": "Location of the dropoff.",
+                        "type": "object",
+                        "properties": {
+                          "coordinates": {
+                            "description": "Coordinates for the dropoff location.\n\nCoordinates have to match those in the shipment promise response to provide confirmation of the geocoded location.\n",
+                            "type": "object",
+                            "properties": {
+                              "lat": {
+                                "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              },
+                              "lon": {
+                                "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                "type": "number",
+                                "format": "double"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "comment": {
+                        "description": "Any additional information related to dropoff in a free text form. Displayed to the courier partner to help finding the recipient easier.",
+                        "type": "string"
+                      },
+                      "options": {
+                        "description": "Additional information related to the dropoff.",
+                        "type": "object",
+                        "properties": {
+                          "is_no_contact": {
+                            "description": "Defines if the delivery should be no-contact delivery.",
+                            "type": "boolean",
+                            "default": false
+                          },
+                          "scheduled_time": {
+                            "description": "The date and time (ISO 8601 format) when the order is scheduled to be dropped off. Has to match the one in related shipment promise.",
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ]
+                  },
+                  "recipient": {
+                    "description": "Details of the recipient who is going to receive the parcels.",
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "description": "Name of delivery recipient. Must be non-empty string.",
+                        "type": "string"
+                      },
+                      "phone_number": {
+                        "description": "Phone number for the contact with country code and leading plus symbol.",
+                        "type": "string"
+                      },
+                      "email": {
+                        "description": "Email address of delivery recipient.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "phone_number"
+                    ]
+                  },
+                  "parcels": {
+                    "description": "Parcels included in the delivery.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "dimensions": {
+                          "description": "Dimensions of the parcel item. If available, include to enable more order automation.\n",
+                          "type": "object",
+                          "properties": {
+                            "weight_gram": {
+                              "description": "Parcel weight in grams.",
+                              "type": "integer"
+                            },
+                            "width_cm": {
+                              "description": "Parcel width in centimeters.",
+                              "type": "integer"
+                            },
+                            "height_cm": {
+                              "description": "Parcel height in centimeters.",
+                              "type": "integer"
+                            },
+                            "depth_cm": {
+                              "description": "Parcel depth in centimeters.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        "price": {
+                          "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                              "type": "integer"
+                            },
+                            "currency": {
+                              "description": "Three-letter ISO 4217 currency code.",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "description": {
+                          "description": "Description of the parcel item, eg. \"Burger\".\n",
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "description": "Any kind of reference to item, for example GUID.\n",
+                          "type": "string"
+                        },
+                        "dropoff_restrictions": {
+                          "description": "Used when sending eg. age-restricted products.",
+                          "type": "object",
+                          "properties": {
+                            "id_check_required": {
+                              "description": "Defines whether ID check is required. Enable to ask the courier partner to verify customer identity.",
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "tags": {
+                          "description": "List of the \"features\" of the parcel. Tag is visible in courier application. Used together with ID check requirement. Possible values \"medicine\", \"alcohol\" and \"tobacco\".",
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "alcohol",
+                              "medicine",
+                              "tobacco"
+                            ],
+                            "title": "TagV1"
+                          }
+                        },
+                        "count": {
+                          "description": "Number of items.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "default": 1
+                        },
+                        "options": {
+                          "description": "List of \"options\" related to single parcel, for example items in a meal",
+                          "type": "array",
+                          "items": {
+                            "properties": {
+                              "description": {
+                                "description": "Option description",
+                                "type": "string"
+                              },
+                              "identifier": {
+                                "description": "Option identifier",
+                                "type": "string"
+                              },
+                              "count": {
+                                "description": "Option count",
+                                "minimum": 1,
+                                "default": 1,
+                                "type": "integer"
+                              },
+                              "price": {
+                                "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                                "type": "object",
+                                "properties": {
+                                  "amount": {
+                                    "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                    "type": "integer"
+                                  },
+                                  "currency": {
+                                    "description": "Three-letter ISO 4217 currency code.",
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "title": "ParcelOptionsArray",
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "title": "ParcelV1"
+                    }
+                  },
+                  "shipment_promise_id": {
+                    "description": "Unique identifier of a binding shipment promise received from [create a shipment promise](/docs/api/wolt-drive#create-shipment-promise) response.\n",
+                    "type": "string"
+                  },
+                  "customer_support": {
+                    "description": "Customer support contact information which will be shown for the customer in the Wolt tracking UI.\n",
+                    "type": "object",
+                    "properties": {
+                      "email": {
+                        "description": "Email address for customer support.\n\nThis field will be visible in the tracking view.\n",
+                        "type": "string"
+                      },
+                      "phone_number": {
+                        "description": "Phone number for customer support with country code and leading plus symbol.\n\nThis field will be visible in the tracking view.\n",
+                        "type": "string"
+                      },
+                      "url": {
+                        "description": "URL for the customer support.\n\nThis field will be visible in the tracking view.\n",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "merchant_order_reference_id": {
+                    "description": "Any kind of external reference which links back to the delivery order.",
+                    "type": "string"
+                  },
+                  "sms_notifications": {
+                    "description": "Content for the SMS message(s) which will be sent to the recipient at certain stages of the delivery.\n\nThis is an optional feature for communicating the tracking link to the recipient.\n",
+                    "type": "object",
+                    "properties": {
+                      "received": {
+                        "description": "Content to be sent as sms when order is received. The content should contain a placeholder for the tracking link: TRACKING_LINK. Example: \"Hello John Doe! Your order from Amazing Store will be delivered soon. You can follow it here: TRACKING_LINK\".\n",
+                        "type": "string"
+                      },
+                      "picked_up": {
+                        "description": "Content to be sent as sms when order is picked up. The content should contain a placeholder for the tracking link: TRACKING_LINK. Example: \"Hello John Doe! Your order from Amazing Store has been picked up and will be delivered soon. You can follow it here: TRACKING_LINK\".\n",
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "tips": {
+                    "description": "Any additional monetary pre-delivery tips for courier partner.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "description": "Type of the tip.",
+                          "type": "string",
+                          "enum": [
+                            "pre_delivery_courier_tip"
+                          ]
+                        },
+                        "price": {
+                          "description": "Sum of the tip.",
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                              "type": "integer"
+                            },
+                            "currency": {
+                              "description": "Three-letter ISO 4217 currency code.",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "price"
+                      ],
+                      "title": "Tip"
+                    }
+                  },
+                  "order_number": {
+                    "description": "A short reference which links back to the delivery order.\n\nSuggested to be 5 chars or under. If present, is shown to courier partner instead of `merchant_order_reference_id`.\n",
+                    "type": "string"
+                  },
+                  "cash": {
+                    "description": "_Supported in some markets_. Check with your Wolt Drive contact if cash is included in your contract. Including this payload will enable cash on delivery, and will result in error if cash is not enabled on your account.",
+                    "type": "object",
+                    "properties": {
+                      "amount_to_collect": {
+                        "description": "Amount of cash to receive (e.g. 60€ order, 20€ credit, customer needs to pay 40€). Value should also include the delivery cost. Price presented in whole numbers in the lowest denomination, commonly cents (example amount 40€ = \"4000\").\n",
+                        "type": "integer"
+                      },
+                      "amount_to_expect": {
+                        "description": "Amount of cash expected to have change for (e.g. customer has a 50€ bill). Price presented in whole numbers in the lowest denomination, commonly cents.\n",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "amount_to_collect"
+                    ]
+                  },
+                  "handshake_delivery": {
+                    "description": "_Supported in some regions_. Enables PIN verification on delivery. Check with your Wolt Drive contact if HSD is available. See [feature documentation](/docs/wolt-drive#delivery-handshake-verification).",
+                    "type": "object",
+                    "properties": {
+                      "is_required": {
+                        "description": "Enable PIN verification feature on the delivery. Not supported in all regions, ask your Wolt Drive contact before enabling.",
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "should_send_sms_to_dropoff_contact": {
+                        "description": "When enabled, Wolt will send a pre-defined SMS to recipient including the delivery PIN code. Disable only if PIN is communicated some other way.",
+                        "type": "boolean",
+                        "default": true
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "dropoff",
+                  "recipient",
+                  "parcels",
+                  "shipment_promise_id"
+                ],
+                "title": "DeliveryRequest"
+              }
+            }
+          },
+          "description": "Create delivery payload."
+        }
+      }
+    },
+    "/v1/venues/{venueId}/shipment-promises": {
+      "post": {
+        "operationId": "create-shipment-promise",
+        "summary": "Create a shipment promise",
+        "description": "This is a **venueful** endpoint to request a shipment promise. Use maximum information you have available for best accuracy. See [shipment promise](#shipment-promise) for possible combinations.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "(description not captured in snapshot; see externalDocs)",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Unique identifier for shipment promise. Promise ID is used for creating a delivery order.",
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "description": "The date and time (ISO 8601 format) when the shipment promise was created.",
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "valid_until": {
+                      "description": "The date and time (ISO 8601 format) when the shipment promise will expire.",
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "pickup": {
+                      "description": "The pickup location of the requested delivery.",
+                      "type": "object",
+                      "properties": {
+                        "venue_id": {
+                          "description": "Unique identifier for the venue.",
+                          "type": "string"
+                        },
+                        "location": {
+                          "description": "Location of the pickup.",
+                          "type": "object",
+                          "properties": {
+                            "coordinates": {
+                              "description": "Coordinates for the location.",
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                },
+                                "lon": {
+                                  "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                }
+                              }
+                            },
+                            "formatted_address": {
+                              "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "coordinates"
+                          ]
+                        },
+                        "options": {
+                          "description": "Additional information related to the pickup.",
+                          "type": "object",
+                          "properties": {
+                            "min_preparation_time_minutes": {
+                              "description": "Minimum preparation time in minutes that the venue needs for preparing the order.\n\nThe functionality is further explained under [use cases](/docs/wolt-drive#use-cases).\n",
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "min_preparation_time_minutes"
+                          ]
+                        },
+                        "eta_minutes": {
+                          "description": "Pickup ETA in minutes",
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "location",
+                        "eta_minutes",
+                        "options"
+                      ]
+                    },
+                    "dropoff": {
+                      "description": "The dropoff location of the requested delivery.",
+                      "type": "object",
+                      "properties": {
+                        "location": {
+                          "description": "Location of the dropoff.",
+                          "type": "object",
+                          "properties": {
+                            "coordinates": {
+                              "description": "Coordinates for the location.",
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "description": "Latitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                },
+                                "lon": {
+                                  "description": "Longitude value in [EPSG:3857](https://epsg.io/3857) coordinate reference system.\n",
+                                  "type": "number",
+                                  "format": "double"
+                                }
+                              }
+                            },
+                            "formatted_address": {
+                              "description": "Formatted representation of an address. Includes basic address details and more detailed information related to address type.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "coordinates"
+                          ]
+                        },
+                        "options": {
+                          "description": "Additional information related to the dropoff.",
+                          "type": "object",
+                          "properties": {
+                            "scheduled_time": {
+                              "description": "The date and time (ISO 8601 format) when the shipment is scheduled to be dropped off.",
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        "eta_minutes": {
+                          "description": "Drop off ETA in minutes. This will be null in scheduled dropoff case",
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "location"
+                      ]
+                    },
+                    "price": {
+                      "description": "Price for the requested delivery. VAT included.",
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "description": "Three-letter ISO 4217 currency code.",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "time_estimate_minutes": {
+                      "description": "**WARNING**: This field is deprecated, use `dropoff.eta_minutes` or `dropoff.options.scheduled_time` in order to determine the delivery estimate.\n",
+                      "type": "integer",
+                      "deprecated": true
+                    },
+                    "is_binding": {
+                      "description": "Determines if enough information has been provided and further delivery order can be created from this promise.",
+                      "type": "boolean"
+                    },
+                    "parcels": {
+                      "description": "Parcels included in the delivery.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "dimensions": {
+                            "description": "Dimensions of the parcel item. If available, include to enable more order automation.\n",
+                            "type": "object",
+                            "properties": {
+                              "weight_gram": {
+                                "description": "Parcel weight in grams.",
+                                "type": "integer"
+                              },
+                              "width_cm": {
+                                "description": "Parcel width in centimeters.",
+                                "type": "integer"
+                              },
+                              "height_cm": {
+                                "description": "Parcel height in centimeters.",
+                                "type": "integer"
+                              },
+                              "depth_cm": {
+                                "description": "Parcel depth in centimeters.",
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          "price": {
+                            "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                "type": "integer"
+                              },
+                              "currency": {
+                                "description": "Three-letter ISO 4217 currency code.",
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "description": {
+                            "description": "Description of the parcel item, eg. \"Burger\".\n",
+                            "type": "string"
+                          },
+                          "identifier": {
+                            "description": "Any kind of reference to item, for example GUID.\n",
+                            "type": "string"
+                          },
+                          "dropoff_restrictions": {
+                            "description": "Used when sending eg. age-restricted products.",
+                            "type": "object",
+                            "properties": {
+                              "id_check_required": {
+                                "description": "Defines whether ID check is required. Enable to ask the courier partner to verify customer identity.",
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "tags": {
+                            "description": "List of the \"features\" of the parcel. Tag is visible in courier application. Used together with ID check requirement. Possible values \"medicine\", \"alcohol\" and \"tobacco\".",
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "alcohol",
+                                "medicine",
+                                "tobacco"
+                              ],
+                              "title": "TagV1"
+                            }
+                          },
+                          "count": {
+                            "description": "Number of items.",
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 1
+                          },
+                          "options": {
+                            "description": "List of \"options\" related to single parcel, for example items in a meal",
+                            "type": "array",
+                            "items": {
+                              "properties": {
+                                "description": {
+                                  "description": "Option description",
+                                  "type": "string"
+                                },
+                                "identifier": {
+                                  "description": "Option identifier",
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "description": "Option count",
+                                  "minimum": 1,
+                                  "default": 1,
+                                  "type": "integer"
+                                },
+                                "price": {
+                                  "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                                  "type": "object",
+                                  "properties": {
+                                    "amount": {
+                                      "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                      "type": "integer"
+                                    },
+                                    "currency": {
+                                      "description": "Three-letter ISO 4217 currency code.",
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              },
+                              "title": "ParcelOptionsArray",
+                              "type": "object"
+                            }
+                          }
+                        },
+                        "title": "ParcelV1"
+                      }
+                    }
+                  },
+                  "example": {
+                    "id": "string",
+                    "created_at": "2019-08-24T14:15:22Z",
+                    "valid_until": "2019-08-24T14:15:22Z",
+                    "pickup": {
+                      "venue_id": "string",
+                      "location": {
+                        "coordinates": {
+                          "lat": 0,
+                          "lon": 0
+                        },
+                        "formatted_address": "string"
+                      },
+                      "options": {
+                        "min_preparation_time_minutes": 0
+                      },
+                      "eta_minutes": 0
+                    },
+                    "dropoff": {
+                      "location": {
+                        "coordinates": {
+                          "lat": 0,
+                          "lon": 0
+                        },
+                        "formatted_address": "string"
+                      },
+                      "options": {
+                        "scheduled_time": "2019-08-24T14:15:22Z"
+                      },
+                      "eta_minutes": 0
+                    },
+                    "price": {
+                      "amount": 0,
+                      "currency": "string"
+                    },
+                    "time_estimate_minutes": 0,
+                    "is_binding": true,
+                    "parcels": [
+                      {
+                        "dimensions": {
+                          "weight_gram": 0,
+                          "width_cm": 0,
+                          "height_cm": 0,
+                          "depth_cm": 0
+                        },
+                        "price": {
+                          "amount": 0,
+                          "currency": "AZN"
+                        },
+                        "count": 1
+                      }
+                    ]
+                  },
+                  "required": [
+                    "id",
+                    "created_at",
+                    "valid_until",
+                    "pickup",
+                    "dropoff",
+                    "price",
+                    "time_estimate_minutes",
+                    "is_binding"
+                  ],
+                  "title": "Shipment promise"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "B2B_CONFIG_NOT_FOUND",
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "CORPORATE_PAYMENT_METHOD_NOT_FOUND",
+                        "DAAS_ORDER_NOT_FOUND",
+                        "DELIVERY_AREA_CLOSED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_CONFIG_MISSING_PRICING",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_AUTH_TOKEN",
+                        "INVALID_DROPOFF_ADDRESS",
+                        "INVALID_PAYLOAD",
+                        "INVALID_PICKUP_ADDRESS",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MERCHANT_NOT_FOUND",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS",
+                        "SHIPMENT_PROMISE_NOT_FOUND",
+                        "VENUE_CLOSED",
+                        "VENUE_NOT_FOUND",
+                        "VENUE_ORDER_LIMIT_EXCEEDED",
+                        "WEBHOOK_NOT_FOUND"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuefulDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Unauthorized",
+                      "type": "string",
+                      "enum": [
+                        "Unauthorized"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "title": "UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error_code": {
+                      "description": "Error code which defines the type of the error.",
+                      "type": "string",
+                      "enum": [
+                        "B2B_CONFIG_NOT_FOUND",
+                        "CASH_ON_DELIVERY_DISABLED",
+                        "CORPORATE_PAYMENT_METHOD_NOT_FOUND",
+                        "DAAS_ORDER_NOT_FOUND",
+                        "DELIVERY_AREA_CLOSED",
+                        "DELIVERY_AREA_CLOSED_TEMPORARILY",
+                        "DELIVERY_CONFIG_MISSING_PRICING",
+                        "DROPOFF_OUTSIDE_OF_DELIVERY_AREA",
+                        "GENERIC_INTERNAL_ERROR",
+                        "INVALID_API_AUTH_TOKEN",
+                        "INVALID_DROPOFF_ADDRESS",
+                        "INVALID_PAYLOAD",
+                        "INVALID_PICKUP_ADDRESS",
+                        "INVALID_SCHEDULED_DROPOFF_TIME",
+                        "MERCHANT_NOT_FOUND",
+                        "REQUEST_OUTSIDE_DELIVERY_HOURS",
+                        "SHIPMENT_PROMISE_NOT_FOUND",
+                        "VENUE_CLOSED",
+                        "VENUE_NOT_FOUND",
+                        "VENUE_ORDER_LIMIT_EXCEEDED",
+                        "WEBHOOK_NOT_FOUND"
+                      ]
+                    },
+                    "reason": {
+                      "description": "Human-readable error message.",
+                      "type": "string"
+                    },
+                    "details": {
+                      "description": "Additional details for the error.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error_code",
+                    "reason"
+                  ],
+                  "title": "VenuefulDeliveryPublicApiErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "description": "Validation error message.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "loc": {
+                            "description": "Line of code where the error occurred.",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "msg": {
+                            "description": "Validation error message.",
+                            "type": "string"
+                          },
+                          "type": {
+                            "description": "Type of the validation error.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "loc",
+                          "msg",
+                          "type"
+                        ],
+                        "title": "ValidationError"
+                      }
+                    }
+                  },
+                  "title": "HTTPValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "street": {
+                    "description": "Street name and house number for the shipment.\n",
+                    "type": "string"
+                  },
+                  "city": {
+                    "description": "City name for the shipment.",
+                    "type": "string"
+                  },
+                  "post_code": {
+                    "description": "Post code for the shipment.",
+                    "type": "string"
+                  },
+                  "lat": {
+                    "description": "Latitude for the shipment destination.",
+                    "type": "number",
+                    "format": "double"
+                  },
+                  "lon": {
+                    "description": "Longitude for the shipment destination.",
+                    "type": "number",
+                    "format": "double"
+                  },
+                  "language": {
+                    "description": "Language to return the address in the response. The address in response will be localized in this language if the locale is available.",
+                    "type": "string"
+                  },
+                  "min_preparation_time_minutes": {
+                    "description": "Minimum preparation time in minutes that the venue needs for preparing the order.\n\nThe functionality is further explained under [use cases](/docs/wolt-drive#use-cases).\n",
+                    "type": "integer",
+                    "default": 30,
+                    "maximum": 60,
+                    "minimum": 0
+                  },
+                  "scheduled_dropoff_time": {
+                    "description": "Optionally, the date and time (ISO 8601 format) when the order is scheduled to be dropped off later.",
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "parcels": {
+                    "description": "Parcels included in the delivery.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "dimensions": {
+                          "description": "Dimensions of the parcel item. If available, include to enable more order automation.\n",
+                          "type": "object",
+                          "properties": {
+                            "weight_gram": {
+                              "description": "Parcel weight in grams.",
+                              "type": "integer"
+                            },
+                            "width_cm": {
+                              "description": "Parcel width in centimeters.",
+                              "type": "integer"
+                            },
+                            "height_cm": {
+                              "description": "Parcel height in centimeters.",
+                              "type": "integer"
+                            },
+                            "depth_cm": {
+                              "description": "Parcel depth in centimeters.",
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        "price": {
+                          "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                          "type": "object",
+                          "properties": {
+                            "amount": {
+                              "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                              "type": "integer"
+                            },
+                            "currency": {
+                              "description": "Three-letter ISO 4217 currency code.",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "description": {
+                          "description": "Description of the parcel item, eg. \"Burger\".\n",
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "description": "Any kind of reference to item, for example GUID.\n",
+                          "type": "string"
+                        },
+                        "dropoff_restrictions": {
+                          "description": "Used when sending eg. age-restricted products.",
+                          "type": "object",
+                          "properties": {
+                            "id_check_required": {
+                              "description": "Defines whether ID check is required. Enable to ask the courier partner to verify customer identity.",
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "tags": {
+                          "description": "List of the \"features\" of the parcel. Tag is visible in courier application. Used together with ID check requirement. Possible values \"medicine\", \"alcohol\" and \"tobacco\".",
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "alcohol",
+                              "medicine",
+                              "tobacco"
+                            ],
+                            "title": "TagV1"
+                          }
+                        },
+                        "count": {
+                          "description": "Number of items.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "default": 1
+                        },
+                        "options": {
+                          "description": "List of \"options\" related to single parcel, for example items in a meal",
+                          "type": "array",
+                          "items": {
+                            "properties": {
+                              "description": {
+                                "description": "Option description",
+                                "type": "string"
+                              },
+                              "identifier": {
+                                "description": "Option identifier",
+                                "type": "string"
+                              },
+                              "count": {
+                                "description": "Option count",
+                                "minimum": 1,
+                                "default": 1,
+                                "type": "integer"
+                              },
+                              "price": {
+                                "description": "Price of the parcel item. If available, include to enable more order automation.\n",
+                                "type": "object",
+                                "properties": {
+                                  "amount": {
+                                    "description": "Price presented in whole numbers in the lowest denomination, commonly cents. For example 10.00€ would be 1000.\n",
+                                    "type": "integer"
+                                  },
+                                  "currency": {
+                                    "description": "Three-letter ISO 4217 currency code.",
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "title": "ParcelOptionsArray",
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "title": "ParcelV1"
+                    }
+                  },
+                  "cash": {
+                    "description": "_Supported in some markets_. Check with your Wolt Drive contact if cash is included in your contract. Including this payload will enable cash on delivery, and will result in error if cash is not enabled on your account.",
+                    "type": "object",
+                    "properties": {
+                      "amount_to_collect": {
+                        "description": "Amount of cash to receive (e.g. 60€ order, 20€ credit, customer needs to pay 40€). Value should also include the delivery cost. Price presented in whole numbers in the lowest denomination, commonly cents (example amount 40€ = \"4000\").\n",
+                        "type": "integer"
+                      },
+                      "amount_to_expect": {
+                        "description": "Amount of cash expected to have change for (e.g. customer has a 50€ bill). Price presented in whole numbers in the lowest denomination, commonly cents.\n",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "amount_to_collect"
+                    ]
+                  }
+                },
+                "title": "ShipmentPromiseRequest"
+              }
+            }
+          },
+          "description": "Create shipment promise payload."
+        }
+      }
+    }
+  }
+}

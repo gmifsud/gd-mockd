@@ -1,0 +1,1172 @@
+# Wolt digital twin for mockd
+# ===========================
+#
+# Mocks Wolt's partner integration surface on one port (default 4280):
+#
+#   Authentication 2.0   /oauth2/token, /oauth2/authorize          (mockd OAuth provider)
+#   Order API (v1 + v2)  /orders/{orderId}/..., /v2/orders/{orderId} (stateful, enforced lifecycle)
+#   Menu API             /v1/restaurants/{venueId}/menu, /v2/venues/{venueId}/menu, /venues/{venueId}/items...
+#   Venue API            /venues/{venueId}/status|settings|online|opening-times|...
+#   Time slot API        /v1/venues/{venueId}/time-slots          (contract only)
+#   Wolt Drive API       /v1/venues/{venueId}/shipment-promises, /v1/venues/{venueId}/deliveries, /merchants/...
+#
+# Wolt -> partner traffic (order webhooks, Order Submitter pushes, venue
+# alerts, Drive JWT webhooks) is produced by sim/wolt_sim.py, which follows the
+# `order_events`, `venue_events` and `drive_events` tables written here.
+#
+# Contracts come from specs/*.openapi.json, generated from Wolt's published
+# reference pages (see tools/build_specs.py). Every endpoint not bound below is
+# still served from those specs with Wolt's own example payloads.
+#
+# Start:  mockd start -c examples/wolt/mockd.yaml --no-auth
+# Reset:  curl -X POST http://localhost:4290/state/reset
+#
+# Keys starting with x- are ignored by mockd and only host YAML anchors.
+
+version: "1.0"
+
+# ── Shared response transforms ─────────────────────────────────────────────────
+# Wolt does not document an error body for the marketplace APIs (only status
+# codes), so the twin answers {"detail": "<reason>"}, the shape Wolt Drive uses
+# for 401/422. Drive endpoints use Drive's documented {error_code, reason}.
+x-marketplace-errors: &marketplace-errors
+  fields: { message: detail }
+
+x-read: &read
+  timestamps: { format: none }
+  errors: *marketplace-errors
+
+x-accepted: &accepted            # 202 Accepted, empty body
+  timestamps: { format: none }
+  errors: *marketplace-errors
+  custom: { status: 202, noBody: true }
+
+x-no-content: &no-content        # 204 No Content
+  timestamps: { format: none }
+  errors: *marketplace-errors
+  custom: { status: 204 }
+
+x-ok-json: &ok-json              # 200 with the operation's response
+  timestamps: { format: none }
+  errors: *marketplace-errors
+  fields: { hide: [id] }         # custom operations carry a placeholder id
+
+x-drive-errors: &drive-errors
+  fields: { message: error_code }
+  inject: { reason: "See error_code (mocked by mockd)", details: null }
+
+x-drive-created: &drive-created
+  timestamps: { format: none }
+  errors: *drive-errors
+  custom: { status: 201 }
+
+# ── Fixture building blocks (Wolt's own example payloads) ──────────────────────
+x-venue: &venue { id: "68656c6c6f76326f72646572", name: "Wolt's Cafe", external_venue_id: "wolt_external_store" }
+
+x-location: &location
+  street_address: "Pohjoinen Rautatiekatu 21"
+  apartment: ""
+  city: "Helsinki"
+  country: "FIN"
+  coordinates: { lon: 24.9254858, lat: 60.1700444 }
+  formatted_address: "Pohjoinen Rautatiekatu 21\n00100 Helsinki\nFIN\n\nEntrance / Staircase: 1\nName / Number on the door: 1"
+
+x-order-handling: &order-handling
+  preparation_time: { preparation_time_seconds: 900, preparation_time_source: "forecasted_by_wolt" }
+  acceptance_status: "manual"
+  courier_arrival: "not_sent"
+
+# Order V2 body (developer.wolt.com/docs/api/order#get-order-v2 example)
+x-order-v2: &order-v2
+  venue: *venue
+  basket_price:
+    total: { amount: 4927, currency: EUR }
+    price_breakdown:
+      total_before_discounts: { amount: 5925, currency: EUR }
+      total_discounts: { amount: 998, currency: EUR }
+      subtotal_basket_discounts: { amount: 548, currency: EUR }
+      subtotal_item_discounts: { amount: 450, currency: EUR }
+  fees:
+    total: { amount: 145, currency: EUR }
+    price_breakdown:
+      total_before_discounts: { amount: 295, currency: EUR }
+      total_discounts: { amount: 150, currency: EUR }
+      liability: { amount: 0, currency: EUR }
+    parts:
+      - { type: type_base_delivery, total: { amount: 60, currency: EUR }, vat_percentage: 12 }
+      - { type: type_base_delivery, total: { amount: 40, currency: EUR }, vat_percentage: 19 }
+      - { type: type_delivery_distance_extra, total: { amount: 27, currency: EUR }, vat_percentage: 12 }
+      - { type: type_delivery_distance_extra, total: { amount: 18, currency: EUR }, vat_percentage: 19 }
+  items:
+    - item_type: order-item-with-price-breakdown
+      id: "68656c6c6f6f727632646572"
+      count: 2
+      pos_id: SUPERHAMBURG
+      sku: combo
+      gtin: null
+      options:
+        - id: "68656c6c6f6f727632646575"
+          name: Toppings
+          value: Truffles
+          price: { amount: 500, currency: EUR }
+          vat_percentage: 0
+          price_breakdown:
+            price_before_discounts: { amount: 1000, currency: EUR }
+            total_discounts: { amount: 102, currency: EUR }
+            subtotal_basket_discounts: { amount: 102, currency: EUR }
+            subtotal_item_discounts: { amount: 0, currency: EUR }
+          pos_id: toppings_added
+          count: 1
+          value_pos_id: TRUF
+          deposit: null
+      item_price:
+        unit_price: { amount: 2154, currency: EUR }
+        base_price: { amount: 2290, currency: EUR }
+        vat_percentage: 0
+        total: { amount: 4308, currency: EUR }
+        price_breakdown:
+          total_before_discounts: { amount: 4800, currency: EUR }
+          total_discounts: { amount: 492, currency: EUR }
+          subtotal_basket_discounts: { amount: 390, currency: EUR }
+          subtotal_item_discounts: { amount: 0, currency: EUR }
+          base_price_before_discounts: { amount: 1900, currency: EUR }
+          unit_price_before_discounts: { amount: 2400, currency: EUR }
+          subtotal_options_basket_discounts: { amount: 102, currency: EUR }
+          subtotal_options_item_discounts: { amount: 0, currency: EUR }
+      name: Super Hamburger test
+      category: { id: "65043e12d6d9cb60a18b89ac", name: Burgers }
+      deposit: null
+      is_bundle_offer: false
+    - item_type: order-item-with-price-breakdown
+      id: "68656c6c6f6f727632646562"
+      count: 5
+      pos_id: "123"
+      sku: "123"
+      gtin: null
+      options: []
+      item_price:
+        unit_price: { amount: 123, currency: EUR }
+        base_price: { amount: 706, currency: EUR }
+        vat_percentage: 7
+        total: { amount: 619, currency: EUR }
+        price_breakdown:
+          total_before_discounts: { amount: 1125, currency: EUR }
+          total_discounts: { amount: 506, currency: EUR }
+          subtotal_basket_discounts: { amount: 56, currency: EUR }
+          subtotal_item_discounts: { amount: 450, currency: EUR }
+          base_price_before_discounts: { amount: 200, currency: EUR }
+          unit_price_before_discounts: { amount: 225, currency: EUR }
+          subtotal_options_basket_discounts: { amount: 0, currency: EUR }
+          subtotal_options_item_discounts: { amount: 0, currency: EUR }
+      name: coca cola test
+      category: { id: "68656c6c6f6f727632646563", name: Drinks }
+      deposit: { gross_price: { amount: 25, currency: EUR }, net_price: { amount: 22, currency: EUR }, vat_percentage: 16 }
+      is_bundle_offer: false
+  created_at: "2026-10-19T10:00:00.000Z"
+  consumer_comment: null
+  consumer_name: Yuho
+  consumer_phone_number: "+3581234567"
+  pickup_eta: "2026-10-19T10:20:00.000Z"
+  attribution_id: null
+  type: instant
+  pre_order: null
+  order_number: "10"
+  order_status: received
+  modified_at: "2026-10-19T10:00:00.000Z"
+  company_tax_id: null
+  loyalty_card_number: null
+  cash_payment: null
+  order_handling: *order-handling
+  in_store_operations: null
+  campaigns_applied: []
+
+# Order V1 body (developer.wolt.com/docs/api/order#get-order example). Identity,
+# status and delivery fields are kept in step with the V2 fixture; line items
+# and prices are Wolt's V1 example and differ from the V2 basket.
+x-order-v1: &order-v1
+  venue: *venue
+  price: { amount: 24200, currency: EUR }
+  items:
+    - id: "602fb890e765db64dc152203"
+      item_type: order-item
+      count: 1
+      pos_id: "1623629"
+      sku: "4232134"
+      gtin: "00369545276326"
+      options:
+        - { id: "602fb890e765db64dc152196", name: In the burger, value: Cheese, price: { amount: 1000, currency: EUR }, pos_id: null, count: 1, value_pos_id: "1623576" }
+        - { id: "602fb890e765db64dc1521ca", name: Side, value: Fries, price: { amount: 0, currency: EUR }, pos_id: "1623560", count: 1, value_pos_id: "1623560" }
+      total_price: { amount: 24200, currency: EUR }
+      base_price: { amount: 14000, currency: EUR }
+      unit_price: { amount: 24200, currency: EUR }
+      name: Fried Chicken Burger Combo
+      category: { id: "5bf00d226feade000a37266e", name: Combos }
+      deposit: { gross_price: { amount: 2400, currency: EUR }, net_price: { amount: 2200, currency: EUR }, vat_percentage: 15 }
+      is_bundle_offer: false
+  created_at: "2026-10-19T10:00:00.000Z"
+  consumer_comment: "Don't forget the ketchup please!"
+  pickup_eta: "2026-10-19T10:20:00.000Z"
+  attribution_id: null
+  type: instant
+  pre_order: null
+  consumer_name: Yuho
+  consumer_phone_number: "+3581234567"
+  order_number: "10"
+  order_status: received
+  modified_at: "2026-10-19T10:00:00.000Z"
+  company_tax_id: null
+  loyalty_card_number: null
+  cash_payment: null
+  order_handling: *order-handling
+  in_store_operations: null
+
+x-delivery-wolt: &delivery-wolt
+  status: estimated
+  type: homedelivery
+  time: "2026-10-19T10:45:00.000Z"
+  location: *location
+  self_delivery: false
+x-delivery-takeaway: &delivery-takeaway
+  status: none
+  type: takeaway
+  time: "2026-10-19T10:20:00.000Z"
+  location: null
+  self_delivery: false
+x-delivery-self: &delivery-self
+  status: estimated
+  type: homedelivery
+  time: "2026-10-19T10:50:00.000Z"
+  location: *location
+  self_delivery: true
+x-delivery-done: &delivery-done
+  status: delivered
+  type: homedelivery
+  time: "2026-10-18T18:42:10.000Z"
+  location: *location
+  self_delivery: false
+x-preorder: &preorder { preorder_time: "2026-10-19T18:00:00.000Z", pre_order_status: waiting }
+
+# ── Static mocks ───────────────────────────────────────────────────────────────
+mocks:
+  # Authentication 2.0 — authorization-code flow with single-use refresh tokens.
+  #   GET  /oauth2/authorize?client_id=..&redirect_uri=..&response_type=code&state=..
+  #        (stands in for Wolt's merchant onboarding; auto-approves the venue owner)
+  #   POST /oauth2/token  (HTTP Basic client auth; grant_type=authorization_code|refresh_token)
+  - id: wolt-auth
+    name: Wolt integrations-authentication-service
+    type: oauth
+    enabled: true
+    oauth:
+      issuer: http://localhost:4280/oauth2
+      tokenExpiry: "1h"        # Wolt: access tokens live one hour
+      refreshExpiry: "30d"     # Wolt: refresh tokens live 30 days ...
+      rotateRefreshTokens: true # ... and are single-use
+      defaultScopes: [offline]
+      clients:
+        - clientId: wolt-pilot-client
+          clientSecret: wolt-pilot-secret
+          redirectUris:
+            - http://localhost:3000/wolt/oauth/callback
+            - http://localhost:8080/wolt/oauth/callback
+            - https://oauth.pstmn.io/v1/callback
+          grantTypes: [authorization_code, refresh_token]
+      users:
+        - username: venue-owner
+          password: venue-owner
+          claims:
+            sub: "68656c6c6f76326f72646572"
+            name: "Wolt's Cafe owner"
+
+  # Menu export download. GET /v2/venues/{venueId}/menu answers 202 with a
+  # resource_url pointing here (Wolt hands out a pre-signed S3 URL).
+  - id: wolt-menu-export-download
+    name: Menu export resource_url (stands in for S3)
+    type: http
+    http:
+      matcher: { method: GET, path: "/_mock/s3/menu-exports/{requestId}" }
+      statefulBinding: { table: menu_exports, action: get }
+
+  # Wolt Drive cancellation. Not part of the captured API reference; path taken
+  # from the Wolt Drive endpoints guide (developer.wolt.com/docs/wolt-drive/endpoints).
+  - id: wolt-drive-cancel
+    name: Cancel a Wolt Drive delivery (before courier acceptance)
+    type: http
+    http:
+      matcher: { method: PATCH, path: "/order/{woltOrderReferenceId}/status/cancel" }
+      statefulBinding: { table: deliveries, action: custom, operation: CancelDelivery }
+
+  # Negative-auth fixture: any call presenting this token gets 401.
+  - id: wolt-expired-token
+    name: Expired bearer token
+    type: http
+    http:
+      priority: 100
+      matcher:
+        pathPattern: "^/(orders|v2|v1|venues|merchants|order)/.*"
+        headers: { Authorization: "Bearer expired-token" }
+      response:
+        statusCode: 401
+        headers: { Content-Type: application/json }
+        body: '{"detail":"Unauthorized"}'
+
+# ── Contracts from Wolt's API reference ────────────────────────────────────────
+imports:
+  - { path: specs/order.openapi.json, as: order }
+  - { path: specs/menu.openapi.json, as: menu }
+  - { path: specs/venue.openapi.json, as: venue }
+  - { path: specs/timeslot.openapi.json, as: timeslot }
+  - { path: specs/drive.openapi.json, as: drive }
+
+# ── State ──────────────────────────────────────────────────────────────────────
+tables:
+  # Same order, two representations: GET /orders/{id} (v1) and GET /v2/orders/{id}.
+  # Every lifecycle operation updates both.
+  - name: orders_v2
+    idField: id
+    response: *read
+    seedData:
+      - { <<: *order-v2, id: "6710a1000000000000000001", order_number: "101", delivery: *delivery-wolt }
+      - { <<: *order-v2, id: "6710a1000000000000000002", order_number: "102", delivery: *delivery-takeaway }
+      - { <<: *order-v2, id: "6710a1000000000000000003", order_number: "103", delivery: *delivery-wolt, type: preorder, pre_order: *preorder }
+      - { <<: *order-v2, id: "6710a1000000000000000004", order_number: "104", delivery: *delivery-self }
+      - { <<: *order-v2, id: "6710a1000000000000000005", order_number: "105", delivery: *delivery-done, order_status: delivered, created_at: "2026-10-18T18:00:00.000Z", modified_at: "2026-10-18T18:42:10.000Z" }
+  - name: orders
+    idField: id
+    response: *read
+    seedData:
+      - { <<: *order-v1, id: "6710a1000000000000000001", order_number: "101", delivery: *delivery-wolt }
+      - { <<: *order-v1, id: "6710a1000000000000000002", order_number: "102", delivery: *delivery-takeaway }
+      - { <<: *order-v1, id: "6710a1000000000000000003", order_number: "103", delivery: *delivery-wolt, type: preorder, pre_order: *preorder }
+      - { <<: *order-v1, id: "6710a1000000000000000004", order_number: "104", delivery: *delivery-self }
+      - { <<: *order-v1, id: "6710a1000000000000000005", order_number: "105", delivery: *delivery-done, order_status: delivered, created_at: "2026-10-18T18:00:00.000Z", modified_at: "2026-10-18T18:42:10.000Z" }
+
+  # Append-only log of partner actions; sim/wolt_sim.py turns these into webhooks.
+  - name: order_events
+    idField: id
+    idStrategy: sequence
+
+  # Venue API state. Fields starting with "_" are internal and never returned.
+  - name: venues
+    idField: id
+    response:
+      timestamps: { format: none }
+      errors: *marketplace-errors
+      fields: { hide: [id, _delivery_provider, _offline_until, _special_opening_times] }
+    seedData:
+      - id: "68656c6c6f76326f72646572"
+        external_venue_id: wolt_external_store
+        status: { is_open: true, is_online: true, is_ipad_free: true }
+        contact_details: { address: "Pohjoinen Rautatiekatu 21", phone: "+3581234567" }
+        opening_times:
+          - { opening_day: MONDAY, opening_time: "00:00", closing_day: SUNDAY, closing_time: "24:00" }
+        special_times: []
+        delivery_area:
+          - { lat: 60.17734425244339, lng: 24.917020270161032 }
+          - { lat: 60.18649367021024, lng: 24.954304719812797 }
+          - { lat: 60.171082655559786, lng: 24.982873324091287 }
+          - { lat: 60.15349563690458, lng: 24.932272999563537 }
+          - { lat: 60.17734425244339, lng: 24.917020270161032 }
+        venue_config:
+          order_api_enabled: true
+          menu_api_enabled: true
+          prep_time_duration: 600
+          max_acceptance_prep_time_duration: null
+          rate_limit_settings:
+            itemsUpdate: { refresh_rate_in_minutes: 1, limit: 120 }
+            getMenu: { refresh_rate_in_minutes: 1, limit: 999 }
+        last_three_orders_status: [DELIVERED]
+        order_handling_configuration: { acceptance_by_wolt: false, using_courier_arrival_notification: true }
+        _delivery_provider: WOLT
+        _offline_until: null
+        _special_opening_times: null
+  - name: venue_events
+    idField: id
+    idStrategy: sequence
+
+  # Menu API state: the last menu pushed per venue, and async export requests.
+  - name: menus
+    idField: id
+    response: *read
+    seedData:
+      - id: "68656c6c6f76326f72646572"
+        menu:
+          id: "wolt-pilot-menu"
+          currency: EUR
+          primary_language: en
+          categories:
+            - id: burgers
+              name: [{ lang: en, value: Burgers }]
+              items:
+                - external_data: { external_id: SUPERHAMBURG }
+                  name: [{ lang: en, value: Super Hamburger }]
+                  price: 2290
+                  vat_percentage: 14
+                  enabled: true
+            - id: drinks
+              name: [{ lang: en, value: Drinks }]
+              items:
+                - external_data: { external_id: "123" }
+                  name: [{ lang: en, value: Coca-Cola 0.33 l }]
+                  price: 225
+                  vat_percentage: 14
+                  enabled: true
+  - name: menu_events
+    idField: id
+    idStrategy: sequence
+  - name: menu_exports
+    idField: id
+    response:
+      timestamps: { format: none }
+      errors: *marketplace-errors
+      fields: { hide: [id, _venue_id] }
+
+  # Wolt Drive state.
+  - name: drive_venues
+    idField: id
+    seedData:
+      - id: "6710d0000000000000000001"
+        name: "Wolt's Cafe (Drive)"
+        currency: EUR
+        location: { coordinates: { lat: 60.1700444, lon: 24.9254858 }, formatted_address: "Pohjoinen Rautatiekatu 21, 00100 Helsinki" }
+        # Delivery area: a lat/lon box around the venue (Helsinki centre).
+        max_lat_offset: 0.15
+        max_lon_offset: 0.30
+        base_fee: 590
+  - name: shipment_promises
+    idField: id
+    response:
+      timestamps: { format: none }
+      errors: *drive-errors
+  - name: deliveries
+    idField: id
+    response:
+      timestamps: { format: none }
+      errors: *drive-errors
+  - name: drive_events
+    idField: id
+    idStrategy: sequence
+
+# ── Business rules ─────────────────────────────────────────────────────────────
+# Expression notes: '"x"' is a string literal, bare names are variables.
+# Nested fields are updated with fromPairs(concat(toPairs(obj), [["k", v]])).
+x-ts: &ts { type: set, var: ts, value: 'now().UTC().Format("2006-01-02T15:04:05.000Z")' }
+x-read-v2: &read-v2 { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+x-read-v1: &read-v1 { type: read, resource: orders, id: input.orderId, as: o1 }
+
+customOperations:
+  # PUT /orders/{orderId}/accept  {adjusted_pickup_time?}
+  - name: AcceptOrder
+    consistency: atomic
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: 'o2.order_status in ["received", "fetched", "acknowledged"]'
+        errorMessage: "Order can only be accepted before it is accepted, rejected or delivered"
+        errorStatus: 409
+      - type: validate
+        condition: "o2.delivery.self_delivery != true"
+        errorMessage: "Self-delivery orders are accepted via /self-delivery/accept"
+        errorStatus: 409
+      - type: validate
+        condition: 'input.adjusted_pickup_time == nil || date(input.adjusted_pickup_time) - date(o2.pickup_eta) <= duration("25m")'
+        errorMessage: "adjusted_pickup_time cannot be more than 25 minutes after the initial pickup estimate"
+        errorStatus: 400
+      - *ts
+      - type: update
+        resource: orders_v2
+        id: input.orderId
+        set: { order_status: '"production"', modified_at: ts, pickup_eta: "input.adjusted_pickup_time ?? o2.pickup_eta" }
+      - type: update
+        resource: orders
+        id: input.orderId
+        set: { order_status: '"production"', modified_at: ts, pickup_eta: "input.adjusted_pickup_time ?? o2.pickup_eta" }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"accept"', order_status: '"production"', at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/reject  {reason, code?}
+  - name: RejectOrder
+    consistency: atomic
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: 'input.reason != nil && input.reason != ""'
+        errorMessage: "reason is required"
+        errorStatus: 400
+      - type: validate
+        condition: 'input.code == nil || input.code in ["GENERIC", "ITEMS_UNAVAILABLE", "VENUE_CLOSING_SOON"]'
+        errorMessage: "code must be one of GENERIC, ITEMS_UNAVAILABLE, VENUE_CLOSING_SOON"
+        errorStatus: 400
+      - type: validate
+        condition: 'o2.order_status in ["received", "fetched", "acknowledged"]'
+        errorMessage: "Order can only be rejected before it has been accepted"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { order_status: '"rejected"', modified_at: ts } }
+      - { type: update, resource: orders, id: input.orderId, set: { order_status: '"rejected"', modified_at: ts } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"reject"', order_status: '"rejected"', at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/self-delivery/accept  {total_delivery_time?}
+  - name: AcceptSelfDeliveryOrder
+    consistency: atomic
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: "o2.delivery.self_delivery == true"
+        errorMessage: "Order is not a self-delivery order"
+        errorStatus: 409
+      - type: validate
+        condition: 'o2.order_status in ["received", "fetched", "acknowledged"]'
+        errorMessage: "Order can only be accepted before it is accepted, rejected or delivered"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { order_status: '"production"', modified_at: ts } }
+      - { type: update, resource: orders, id: input.orderId, set: { order_status: '"production"', modified_at: ts } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"self_delivery_accept"', order_status: '"production"', at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/confirm-preorder
+  - name: ConfirmPreorder
+    consistency: atomic
+    steps:
+      - *read-v2
+      - *read-v1
+      - type: validate
+        condition: 'o2.type == "preorder" && o2.pre_order != nil && o2.pre_order.pre_order_status == "waiting"'
+        errorMessage: "Only waiting pre-orders can be confirmed"
+        errorStatus: 409
+      - *ts
+      - type: update
+        resource: orders_v2
+        id: input.orderId
+        set: { modified_at: ts, pre_order: 'fromPairs(concat(toPairs(o2.pre_order), [["pre_order_status", "confirmed"]]))' }
+      - type: update
+        resource: orders
+        id: input.orderId
+        set: { modified_at: ts, pre_order: 'fromPairs(concat(toPairs(o1.pre_order), [["pre_order_status", "confirmed"]]))' }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"confirm_preorder"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/ready
+  - name: MarkOrderReady
+    consistency: atomic
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: 'o2.order_status == "production"'
+        errorMessage: "Only accepted orders (status production) can be marked ready"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { order_status: '"ready"', modified_at: ts } }
+      - { type: update, resource: orders, id: input.orderId, set: { order_status: '"ready"', modified_at: ts } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"ready"', order_status: '"ready"', at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/delivered
+  - name: MarkOrderDelivered
+    consistency: atomic
+    steps:
+      - *read-v2
+      - *read-v1
+      - type: validate
+        condition: 'o2.order_status == "ready"'
+        errorMessage: "Only ready orders can be marked delivered"
+        errorStatus: 409
+      - *ts
+      - type: update
+        resource: orders_v2
+        id: input.orderId
+        set: { order_status: '"delivered"', modified_at: ts, delivery: 'o2.delivery.type == "takeaway" ? o2.delivery : fromPairs(concat(toPairs(o2.delivery), [["status", "delivered"]]))' }
+      - type: update
+        resource: orders
+        id: input.orderId
+        set: { order_status: '"delivered"', modified_at: ts, delivery: 'o1.delivery.type == "takeaway" ? o1.delivery : fromPairs(concat(toPairs(o1.delivery), [["status", "delivered"]]))' }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"delivered"', order_status: '"delivered"', at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/pickup-completed (self-delivery, after ready)
+  - name: MarkPickupCompleted
+    consistency: atomic
+    steps:
+      - *read-v2
+      - *read-v1
+      - type: validate
+        condition: 'o2.delivery.self_delivery == true && o2.order_status == "ready"'
+        errorMessage: "Valid only for self-delivery orders that are marked ready"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { modified_at: ts, delivery: 'fromPairs(concat(toPairs(o2.delivery), [["status", "picked_up"]]))' } }
+      - { type: update, resource: orders, id: input.orderId, set: { modified_at: ts, delivery: 'fromPairs(concat(toPairs(o1.delivery), [["status", "picked_up"]]))' } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"pickup_completed"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/courier-at-customer (self-delivery, after ready)
+  - name: MarkCourierAtCustomer
+    consistency: atomic
+    steps:
+      - *read-v2
+      - *read-v1
+      - type: validate
+        condition: 'o2.delivery.self_delivery == true && o2.order_status == "ready"'
+        errorMessage: "Valid only for self-delivery orders that are marked ready"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { modified_at: ts, delivery: 'fromPairs(concat(toPairs(o2.delivery), [["status", "courier_at_delivery_location"]]))' } }
+      - { type: update, resource: orders, id: input.orderId, set: { modified_at: ts, delivery: 'fromPairs(concat(toPairs(o1.delivery), [["status", "courier_at_delivery_location"]]))' } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"courier_at_customer"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/delivery/tracking/location  {location, heading?, is_delivering_this_order?}
+  - name: UpdateCourierLocation
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: "o2.delivery.self_delivery == true"
+        errorMessage: "Courier location is only accepted for self-delivery orders"
+        errorStatus: 409
+      - type: validate
+        condition: 'o2.order_status == "ready"'
+        errorMessage: "Location can only be updated after the order has been marked ready"
+        errorStatus: 400
+      - type: validate
+        condition: "input.location != nil"
+        errorMessage: "location is required"
+        errorStatus: 400
+      - *ts
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"courier_location"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/delivery/eta  {eta_minutes}
+  - name: UpdateDeliveryEta
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: "o2.delivery.self_delivery == true"
+        errorMessage: "ETA updates are only accepted for self-delivery orders"
+        errorStatus: 409
+      - type: validate
+        condition: "input.eta_minutes != nil && input.eta_minutes >= 0"
+        errorMessage: "eta_minutes is required"
+        errorStatus: 400
+      - *ts
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"delivery_eta"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/replace-items  {item_changes, item_additions?}
+  # Wolt processes replacements asynchronously; the twin records them only.
+  - name: ReplaceOrderItems
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: "input.item_changes != nil"
+        errorMessage: "item_changes is required"
+        errorStatus: 400
+      - type: validate
+        condition: 'o2.order_status == "production"'
+        errorMessage: "Items can only be replaced while the order is in production"
+        errorStatus: 409
+      - *ts
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"replace_items"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/sent-to-pos  {success, time_sent_to_pos}
+  - name: MarkOrderSentToPos
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: "input.success != nil && input.time_sent_to_pos != nil"
+        errorMessage: "success and time_sent_to_pos are required"
+        errorStatus: 400
+      - *ts
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"sent_to_pos"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # PUT /orders/{orderId}/deposits-returned  {action, items}
+  - name: MarkDepositsReturned
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: 'input.action == "REFUND_USER_CREDITS" && input.items != nil'
+        errorMessage: "action (REFUND_USER_CREDITS) and items are required"
+        errorStatus: 400
+      - *ts
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"deposits_returned"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # POST /orders/{orderId}/refund-items  {reason, item_refunds}
+  - name: RefundItems
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: 'input.reason in ["PRICE_DIFFERENCE", "QUALITY_ISSUES"] && input.item_refunds != nil && len(input.item_refunds) > 0'
+        errorMessage: "reason (PRICE_DIFFERENCE|QUALITY_ISSUES) and a non-empty item_refunds are required"
+        errorStatus: 400
+      - type: validate
+        condition: 'not (o2.order_status in ["received", "fetched", "acknowledged", "rejected"])'
+        errorMessage: "The order is not yet in a state that allows item refunds"
+        errorStatus: 409
+      - *ts
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"refund_items"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # POST /orders/{orderId}/refund-basket  {basket_refunds: [exactly one]}
+  - name: RefundBasket
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: "input.basket_refunds != nil && len(input.basket_refunds) == 1"
+        errorMessage: "Exactly one basket refund per request is allowed"
+        errorStatus: 400
+      - type: validate
+        condition: 'not (o2.order_status in ["received", "fetched", "acknowledged", "rejected"])'
+        errorMessage: "The order is not yet in a state that allows refunds"
+        errorStatus: 409
+      - *ts
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"refund_basket"', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  # ── Wolt-side transitions (no HTTP route; run by sim/wolt_sim.py through
+  #    POST /state/operations/{name}/execute, or by `mockd stateful custom run`) ──
+  - name: WoltCancelOrder              # consumer / Wolt support cancels, or auto-reject
+    consistency: atomic
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: 'not (o2.order_status in ["delivered", "rejected"])'
+        errorMessage: "Order is already final"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { order_status: '"rejected"', modified_at: ts } }
+      - { type: update, resource: orders, id: input.orderId, set: { order_status: '"rejected"', modified_at: ts } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"wolt_cancel"', order_status: '"rejected"', at: ts, payload: input }
+    response: { id: input.orderId }
+
+  - name: WoltStartPreorderProduction  # confirmed pre-order reaches its preparation window
+    consistency: atomic
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - type: validate
+        condition: 'o2.type == "preorder" && o2.pre_order.pre_order_status == "confirmed" && o2.order_status in ["received", "fetched", "acknowledged"]'
+        errorMessage: "Only confirmed pre-orders awaiting preparation can start production"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { order_status: '"production"', modified_at: ts } }
+      - { type: update, resource: orders, id: input.orderId, set: { order_status: '"production"', modified_at: ts } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"wolt_preorder_production"', order_status: '"production"', at: ts, payload: input }
+    response: { id: input.orderId }
+
+  - name: WoltCourierUpdate            # Wolt courier progress: courier_at_venue | picked_up | courier_at_delivery_location
+    consistency: atomic
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - { type: read, resource: orders, id: input.orderId, as: o1 }
+      - type: validate
+        condition: 'o2.delivery.type == "homedelivery" && o2.delivery.self_delivery != true && o2.order_status in ["production", "ready"]'
+        errorMessage: "Only accepted Wolt-delivered orders have courier updates"
+        errorStatus: 409
+      - type: validate
+        condition: 'input.status in ["courier_at_venue", "picked_up", "courier_at_delivery_location"]'
+        errorMessage: "status must be courier_at_venue, picked_up or courier_at_delivery_location"
+        errorStatus: 400
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { modified_at: ts, delivery: 'fromPairs(concat(toPairs(o2.delivery), [["status", input.status]]))' } }
+      - { type: update, resource: orders, id: input.orderId, set: { modified_at: ts, delivery: 'fromPairs(concat(toPairs(o1.delivery), [["status", input.status]]))' } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"wolt_courier_" + input.status', order_status: o2.order_status, at: ts, payload: input }
+    response: { id: input.orderId }
+
+  - name: WoltDeliverOrder             # Wolt courier completes the drop-off
+    consistency: atomic
+    steps:
+      - { type: read, resource: orders_v2, id: input.orderId, as: o2 }
+      - { type: read, resource: orders, id: input.orderId, as: o1 }
+      - type: validate
+        condition: 'o2.delivery.type == "homedelivery" && o2.delivery.self_delivery != true && o2.order_status in ["production", "ready"]'
+        errorMessage: "Only accepted Wolt-delivered orders can be delivered by Wolt"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: orders_v2, id: input.orderId, set: { order_status: '"delivered"', modified_at: ts, delivery: 'fromPairs(concat(toPairs(o2.delivery), [["status", "delivered"]]))' } }
+      - { type: update, resource: orders, id: input.orderId, set: { order_status: '"delivered"', modified_at: ts, delivery: 'fromPairs(concat(toPairs(o1.delivery), [["status", "delivered"]]))' } }
+      - type: create
+        resource: order_events
+        set: { order_id: input.orderId, venue_id: o2.venue.id, action: '"wolt_delivered"', order_status: '"delivered"', at: ts, payload: input }
+    response: { id: input.orderId }
+
+  - name: WoltDriveUpdate              # Wolt Drive courier progress for a delivery
+    steps:
+      - { type: list, resource: deliveries, as: found, filter: { id: input.woltOrderReferenceId } }
+      - type: validate
+        condition: "len(found) == 1"
+        errorMessage: "ORDER_NOT_FOUND"
+        errorStatus: 404
+      - *ts
+      - { type: update, resource: deliveries, id: input.woltOrderReferenceId, set: { status: input.status } }
+      - type: create
+        resource: drive_events
+        set: { kind: '"status"', venue_id: 'found[0].venue_id', ref: input.woltOrderReferenceId, at: ts, payload: input }
+    response: { id: input.woltOrderReferenceId }
+
+  # ── Venue API ──
+  # PATCH /venues/{venueId}/online  {status: ONLINE|OFFLINE, until?}
+  - name: SetVenueOnlineStatus
+    steps:
+      - { type: read, resource: venues, id: input.venueId, as: v }
+      - type: validate
+        condition: 'input.status in ["ONLINE", "OFFLINE"]'
+        errorMessage: "status must be ONLINE or OFFLINE"
+        errorStatus: 400
+      - *ts
+      - type: update
+        resource: venues
+        id: input.venueId
+        set:
+          status: 'fromPairs(concat(toPairs(v.status), [["is_online", input.status == "ONLINE"]]))'
+          _offline_until: 'input.status == "OFFLINE" ? input.until : nil'
+      - type: create
+        resource: venue_events
+        set: { venue_id: input.venueId, external_venue_id: v.external_venue_id, action: '"online_status"', at: ts, payload: input }
+    response: { id: input.venueId }
+
+  # PATCH /venues/{venueId}/opening-times  {availability: [...]}
+  - name: UpdateVenueOpeningTimes
+    steps:
+      - { type: read, resource: venues, id: input.venueId, as: v }
+      - type: validate
+        condition: "input.availability != nil"
+        errorMessage: "availability is required"
+        errorStatus: 400
+      - *ts
+      - { type: update, resource: venues, id: input.venueId, set: { opening_times: input.availability } }
+      - type: create
+        resource: venue_events
+        set: { venue_id: input.venueId, external_venue_id: v.external_venue_id, action: '"opening_times"', at: ts, payload: input }
+    response: { id: input.venueId }
+
+  # PUT /venues/{venueId}/special-opening-times  {days_closed?, days_open?, ...}
+  - name: SetVenueSpecialOpeningTimes
+    steps:
+      - { type: read, resource: venues, id: input.venueId, as: v }
+      - *ts
+      - { type: update, resource: venues, id: input.venueId, set: { _special_opening_times: input } }
+      - type: create
+        resource: venue_events
+        set: { venue_id: input.venueId, external_venue_id: v.external_venue_id, action: '"special_opening_times"', at: ts, payload: input }
+    response: { id: input.venueId }
+
+  # GET /venues/{venueId}/settings
+  - name: GetVenueSettings
+    steps:
+      - { type: read, resource: venues, id: input.venueId, as: v }
+    response: { status: '{"is_open": v.status.is_open}' }
+
+  # GET /venues/{venueId}/delivery-provider
+  - name: GetVenueDeliveryProvider
+    steps:
+      - { type: read, resource: venues, id: input.venueId, as: v }
+    response: { delivery_provider: v._delivery_provider }
+
+  # PATCH /venues/{venueId}/delivery-provider  {delivery_provider: WOLT|SELF_DELIVERY}
+  - name: SetVenueDeliveryProvider
+    steps:
+      - { type: read, resource: venues, id: input.venueId, as: v }
+      - type: validate
+        condition: 'input.delivery_provider in ["WOLT", "SELF_DELIVERY"]'
+        errorMessage: "delivery_provider must be WOLT or SELF_DELIVERY"
+        errorStatus: 400
+      - { type: update, resource: venues, id: input.venueId, set: { _delivery_provider: input.delivery_provider } }
+    response: { id: input.venueId }
+
+  # ── Menu API ──
+  # POST /v1/restaurants/{venueId}/menu  (full menu; processed asynchronously by Wolt)
+  - name: CreateMenu
+    steps:
+      - { type: read, resource: menus, id: input.venueId, as: m }
+      - type: validate
+        condition: "input.categories != nil"
+        errorMessage: "categories is required"
+        errorStatus: 400
+      - type: update
+        resource: menus
+        id: input.venueId
+        set: { menu: 'fromPairs(filter(toPairs(input), {#[0] != "venueId"}))' }
+    response: { id: input.venueId }
+
+  # GET /v2/venues/{venueId}/menu -> 202 {request_id, resource_url}
+  - name: RequestMenuExport
+    steps:
+      - { type: read, resource: menus, id: input.venueId, as: m }
+      - type: create
+        resource: menu_exports
+        as: e
+        set: { _venue_id: input.venueId, status: '"READY"', error: nil, menu: m.menu }
+      - { type: update, resource: menu_exports, id: e.id, set: { request_id: e.id } }
+    response:
+      request_id: e.id
+      # Change the host here if clients reach the twin under another name.
+      resource_url: '"http://localhost:4280/_mock/s3/menu-exports/" + e.id'
+
+  # PATCH /venues/{venueId}/items  {data: [{external_id|gtin|sku, price?, enabled?, in_stock?, ...}]}
+  - name: UpdateMenuItems
+    steps:
+      - { type: read, resource: menus, id: input.venueId, as: m }
+      - type: validate
+        condition: "input.data != nil && len(input.data) > 0"
+        errorMessage: "data must be a non-empty array"
+        errorStatus: 400
+      - type: validate
+        condition: "all(input.data, {(#.external_id != nil ? 1 : 0) + (#.gtin != nil ? 1 : 0) + (#.sku != nil ? 1 : 0) == 1})"
+        errorMessage: "Each item must be identified by exactly one of external_id, gtin or sku"
+        errorStatus: 400
+      - *ts
+      - type: create
+        resource: menu_events
+        set: { venue_id: input.venueId, action: '"items"', at: ts, payload: input }
+    response: { id: input.venueId }
+
+  # PATCH /venues/{venueId}/items/inventory  {data: [{external_id|gtin|sku, inventory}]}
+  - name: UpdateMenuInventory
+    steps:
+      - { type: read, resource: menus, id: input.venueId, as: m }
+      - type: validate
+        condition: "input.data != nil && len(input.data) > 0"
+        errorMessage: "data must be a non-empty array"
+        errorStatus: 400
+      - type: validate
+        condition: "all(input.data, {(#.external_id != nil ? 1 : 0) + (#.gtin != nil ? 1 : 0) + (#.sku != nil ? 1 : 0) == 1})"
+        errorMessage: "Each item must be identified by exactly one of external_id, gtin or sku"
+        errorStatus: 400
+      - type: validate
+        condition: "all(input.data, {#.inventory != nil})"
+        errorMessage: "inventory is required (null is not accepted)"
+        errorStatus: 400
+      - *ts
+      - type: create
+        resource: menu_events
+        set: { venue_id: input.venueId, action: '"inventory"', at: ts, payload: input }
+    response: { id: input.venueId }
+
+  # PATCH /venues/{venueId}/options/values  {data: [{external_id, price?, enabled?, ...}]}
+  - name: UpdateMenuOptions
+    steps:
+      - { type: read, resource: menus, id: input.venueId, as: m }
+      - type: validate
+        condition: "input.data != nil && len(input.data) > 0 && all(input.data, {#.external_id != nil})"
+        errorMessage: "data must be a non-empty array of option values with external_id"
+        errorStatus: 400
+      - *ts
+      - type: create
+        resource: menu_events
+        set: { venue_id: input.venueId, action: '"options"', at: ts, payload: input }
+    response: { id: input.venueId }
+
+  # ── Wolt Drive (venueful flow) ──
+  # POST /v1/venues/{venueId}/shipment-promises
+  - name: CreateShipmentPromise
+    steps:
+      - { type: list, resource: drive_venues, as: venues, filter: { id: input.venueId } }
+      - type: validate
+        condition: "len(venues) == 1"
+        errorMessage: "VENUE_NOT_FOUND"
+        errorStatus: 404
+      - { type: set, var: v, value: "venues[0]" }
+      - type: validate
+        condition: "input.lat == nil || input.lon == nil || (abs(input.lat - v.location.coordinates.lat) <= v.max_lat_offset && abs(input.lon - v.location.coordinates.lon) <= v.max_lon_offset)"
+        errorMessage: "DROPOFF_OUTSIDE_OF_DELIVERY_AREA"
+        errorStatus: 400
+      - type: validate
+        condition: "input.scheduled_dropoff_time == nil || date(input.scheduled_dropoff_time) > now()"
+        errorMessage: "INVALID_SCHEDULED_DROPOFF_TIME"
+        errorStatus: 400
+      - type: validate
+        condition: "input.cash == nil"
+        errorMessage: "CASH_ON_DELIVERY_DISABLED"
+        errorStatus: 400
+      - { type: set, var: prep, value: "input.min_preparation_time_minutes ?? 0" }
+      - *ts
+      - type: create
+        resource: shipment_promises
+        as: p
+        set:
+          created_at: ts
+          valid_until: 'now().Add(duration("10m")).UTC().Format("2006-01-02T15:04:05.000Z")'
+          pickup: '{"venue_id": input.venueId, "location": v.location, "options": {"min_preparation_time_minutes": prep}, "eta_minutes": prep + 5}'
+          dropoff: '{"location": {"coordinates": {"lat": input.lat, "lon": input.lon}, "formatted_address": join([input.street ?? "", input.post_code ?? "", input.city ?? ""], " ")}, "options": {"scheduled_time": input.scheduled_dropoff_time}, "eta_minutes": prep + 25}'
+          price: '{"amount": v.base_fee, "currency": v.currency}'
+          time_estimate_minutes: "prep + 25"
+          # Wolt: binding only when the location is precise enough (coordinates given).
+          is_binding: "input.lat != nil && input.lon != nil"
+          parcels: "input.parcels ?? []"
+      - type: create
+        resource: drive_events
+        set: { kind: '"shipment_promise"', venue_id: input.venueId, ref: p.id, at: ts, payload: input }
+    response:
+      id: p.id
+      created_at: p.created_at
+      valid_until: p.valid_until
+      pickup: p.pickup
+      dropoff: p.dropoff
+      price: p.price
+      time_estimate_minutes: p.time_estimate_minutes
+      is_binding: p.is_binding
+      parcels: p.parcels
+
+  # POST /v1/venues/{venueId}/deliveries
+  - name: CreateDelivery
+    steps:
+      - type: validate
+        condition: "input.shipment_promise_id != nil && input.recipient != nil && input.parcels != nil && input.dropoff != nil"
+        errorMessage: "INVALID_PAYLOAD"
+        errorStatus: 400
+      - { type: list, resource: shipment_promises, as: promises, filter: { id: input.shipment_promise_id } }
+      - type: validate
+        condition: 'len(promises) == 1 && promises[0].pickup.venue_id == input.venueId && date(promises[0].valid_until) > now()'
+        errorMessage: "SHIPMENT_PROMISE_NOT_FOUND"
+        errorStatus: 400
+      - { type: set, var: p, value: "promises[0]" }
+      - type: validate
+        condition: "p.is_binding"
+        errorMessage: "INVALID_PAYLOAD"
+        errorStatus: 400
+      - { type: list, resource: deliveries, as: dups, filter: { merchant_order_reference_id: input.merchant_order_reference_id } }
+      - type: validate
+        condition: "input.merchant_order_reference_id == nil || len(dups) == 0"
+        errorMessage: "DUPLICATE_ORDER"
+        errorStatus: 400
+      - *ts
+      - type: create
+        resource: deliveries
+        as: d
+        set:
+          venue_id: input.venueId
+          status: '"INFO_RECEIVED"'
+          pickup: '{"location": p.pickup.location, "comment": input.pickup?.comment, "options": {"min_preparation_time_minutes": p.pickup.options.min_preparation_time_minutes}, "eta": now().Add(duration(string(p.pickup.eta_minutes) + "m")).UTC().Format("2006-01-02T15:04:05.000Z")}'
+          dropoff: '{"location": p.dropoff.location, "comment": input.dropoff.comment, "options": input.dropoff.options, "eta": now().Add(duration(string(p.time_estimate_minutes) + "m")).UTC().Format("2006-01-02T15:04:05.000Z")}'
+          price: p.price
+          recipient: input.recipient
+          parcels: input.parcels
+          customer_support: input.customer_support
+          merchant_order_reference_id: input.merchant_order_reference_id
+          tips: "input.tips ?? []"
+          order_number: input.order_number
+          shipment_promise_id: input.shipment_promise_id
+          handshake_delivery: input.handshake_delivery
+      - type: update
+        resource: deliveries
+        id: d.id
+        as: d
+        set:
+          wolt_order_reference_id: d.id
+          tracking: '{"id": d.id, "url": "http://localhost:4280/_mock/tracking/" + d.id}'
+      - type: create
+        resource: drive_events
+        set: { kind: '"delivery_created"', venue_id: input.venueId, ref: d.id, at: ts, payload: input }
+    response:
+      id: d.id
+      status: d.status
+      tracking: d.tracking
+      pickup: d.pickup
+      dropoff: d.dropoff
+      price: d.price
+      recipient: d.recipient
+      parcels: d.parcels
+      customer_support: d.customer_support
+      wolt_order_reference_id: d.wolt_order_reference_id
+      merchant_order_reference_id: d.merchant_order_reference_id
+      tips: d.tips
+      order_number: d.order_number
+
+  # PATCH /order/{woltOrderReferenceId}/status/cancel
+  - name: CancelDelivery
+    steps:
+      - { type: list, resource: deliveries, as: found, filter: { id: input.woltOrderReferenceId } }
+      - type: validate
+        condition: "len(found) == 1"
+        errorMessage: "ORDER_NOT_FOUND"
+        errorStatus: 404
+      - type: validate
+        condition: 'found[0].status == "INFO_RECEIVED"'
+        errorMessage: "CANCELLATION_NOT_ALLOWED"
+        errorStatus: 409
+      - *ts
+      - { type: update, resource: deliveries, id: input.woltOrderReferenceId, set: { status: '"CANCELLED"' } }
+      - type: create
+        resource: drive_events
+        set: { kind: '"delivery_cancelled"', venue_id: 'found[0].venue_id', ref: input.woltOrderReferenceId, at: ts, payload: input }
+    response: { id: input.woltOrderReferenceId }
+
+# ── Bindings: Wolt operationIds → state ────────────────────────────────────────
+extend:
+  # Order API
+  - { mock: order.get-order, table: orders, action: get }
+  - { mock: order.get-order-v2, table: orders_v2, action: get }
+  - { mock: order.accept-order, table: orders_v2, action: custom, operation: AcceptOrder, response: *accepted }
+  - { mock: order.reject-order, table: orders_v2, action: custom, operation: RejectOrder, response: *accepted }
+  - { mock: order.accept-self-delivery-order, table: orders_v2, action: custom, operation: AcceptSelfDeliveryOrder, response: *accepted }
+  - { mock: order.confirm-preorder, table: orders_v2, action: custom, operation: ConfirmPreorder, response: *no-content }
+  - { mock: order.mark-order-ready, table: orders_v2, action: custom, operation: MarkOrderReady, response: *accepted }
+  - { mock: order.mark-order-delivered, table: orders_v2, action: custom, operation: MarkOrderDelivered, response: *accepted }
+  - { mock: order.mark-pickup-completed, table: orders_v2, action: custom, operation: MarkPickupCompleted, response: *accepted }
+  - { mock: order.mark-courier-at-customer, table: orders_v2, action: custom, operation: MarkCourierAtCustomer, response: *accepted }
+  - { mock: order.courier-tracking-location-update, table: orders_v2, action: custom, operation: UpdateCourierLocation, response: *accepted }
+  - { mock: order.delivery-eta-update, table: orders_v2, action: custom, operation: UpdateDeliveryEta, response: *accepted }
+  - { mock: order.replace-order-items, table: orders_v2, action: custom, operation: ReplaceOrderItems, response: *accepted }
+  - { mock: order.mark-order-sent-to-pos, table: orders_v2, action: custom, operation: MarkOrderSentToPos, response: *no-content }
+  - { mock: order.mark-deposits-returned, table: orders_v2, action: custom, operation: MarkDepositsReturned, response: *accepted }
+  - { mock: order.refund-items, table: orders_v2, action: custom, operation: RefundItems, response: *accepted }
+  - { mock: order.refund-basket, table: orders_v2, action: custom, operation: RefundBasket, response: *accepted }
+  # Venue API
+  - { mock: venue.get-venue-status, table: venues, action: get }
+  - { mock: venue.get-venue-settings, table: venues, action: custom, operation: GetVenueSettings, response: *ok-json }
+  - { mock: venue.get-venue-delivery-provider, table: venues, action: custom, operation: GetVenueDeliveryProvider, response: *ok-json }
+  - { mock: venue.update-venue-delivery-provider, table: venues, action: custom, operation: SetVenueDeliveryProvider, response: *no-content }
+  - { mock: venue.update-venue-online-status, table: venues, action: custom, operation: SetVenueOnlineStatus, response: *no-content }
+  - { mock: venue.update-venue-opening-times, table: venues, action: custom, operation: UpdateVenueOpeningTimes, response: *accepted }
+  - { mock: venue.update-venue-special-opening-times, table: venues, action: custom, operation: SetVenueSpecialOpeningTimes, response: *accepted }
+  # Menu API
+  - { mock: menu.create-menu, table: menus, action: custom, operation: CreateMenu, response: *accepted }
+  - { mock: menu.update-items, table: menus, action: custom, operation: UpdateMenuItems, response: *accepted }
+  - { mock: menu.update-item-inventory, table: menus, action: custom, operation: UpdateMenuInventory, response: *accepted }
+  - { mock: menu.update-options, table: menus, action: custom, operation: UpdateMenuOptions, response: *accepted }
+  - mock: menu.get-menu
+    table: menus
+    action: custom
+    operation: RequestMenuExport
+    response: { timestamps: { format: none }, errors: *marketplace-errors, fields: { hide: [id] }, custom: { status: 202 } }
+  # Wolt Drive
+  - { mock: drive.create-shipment-promise, table: shipment_promises, action: custom, operation: CreateShipmentPromise, response: *drive-created }
+  - { mock: drive.create-delivery, table: deliveries, action: custom, operation: CreateDelivery, response: *drive-created }
