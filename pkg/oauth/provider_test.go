@@ -1787,3 +1787,75 @@ func TestPKCE_DefaultMethodIsPlain(t *testing.T) {
 		t.Error("expected access_token when default method is plain")
 	}
 }
+
+func refreshGrant(t *testing.T, handler *Handler, refreshToken string) (*httptest.ResponseRecorder, TokenResponse) {
+	t.Helper()
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refreshToken)
+	req := httptest.NewRequest(http.MethodPost, "/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("test-client", "test-secret")
+	rec := httptest.NewRecorder()
+	handler.HandleToken(rec, req)
+	var response TokenResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &response)
+	return rec, response
+}
+
+func seedRefreshToken(provider *Provider, token string) {
+	provider.StoreRefreshToken(&RefreshTokenData{
+		Token:     token,
+		ClientID:  "test-client",
+		UserID:    "user-123",
+		Scope:     "profile",
+		ExpiresAt: time.Now().Add(time.Hour),
+	})
+}
+
+func TestRefreshTokenGrant_ReusableByDefault(t *testing.T) {
+	provider, err := NewProvider(testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(provider)
+	seedRefreshToken(provider, "rt-reusable")
+
+	for i := 0; i < 2; i++ {
+		rec, resp := refreshGrant(t, handler, "rt-reusable")
+		if rec.Code != http.StatusOK || resp.RefreshToken != "rt-reusable" {
+			t.Fatalf("call %d: expected 200 echoing the same refresh token, got %d %q", i, rec.Code, resp.RefreshToken)
+		}
+	}
+}
+
+func TestRefreshTokenGrant_RotationMakesTokensSingleUse(t *testing.T) {
+	cfg := testConfig()
+	cfg.RotateRefreshTokens = true
+	provider, err := NewProvider(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(provider)
+	seedRefreshToken(provider, "rt-first")
+
+	rec, first := refreshGrant(t, handler, "rt-first")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if first.RefreshToken == "" || first.RefreshToken == "rt-first" {
+		t.Fatalf("expected a new refresh token, got %q", first.RefreshToken)
+	}
+
+	// The consumed token is now invalid.
+	rec, _ = refreshGrant(t, handler, "rt-first")
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_grant") {
+		t.Fatalf("expected invalid_grant for reused refresh token, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// The rotated token works exactly once more.
+	rec, second := refreshGrant(t, handler, first.RefreshToken)
+	if rec.Code != http.StatusOK || second.RefreshToken == first.RefreshToken {
+		t.Fatalf("expected rotated token to be accepted and replaced, got %d %q", rec.Code, second.RefreshToken)
+	}
+}

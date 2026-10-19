@@ -1,0 +1,1008 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Wolt Venue API",
+    "version": "2026-06-29",
+    "description": "Generated from the official Wolt reference at https://developer.wolt.com/docs/api/venue (snapshot captured 2026-06-29 by github.com/Nirbel/wolt-mcp). Do not hand-edit; regenerate with tools/build_specs.py."
+  },
+  "externalDocs": {
+    "url": "https://developer.wolt.com/docs/api/venue"
+  },
+  "servers": [
+    {
+      "url": "https://pos-integration-service.development.dev.woltapi.com",
+      "description": "Test"
+    },
+    {
+      "url": "https://pos-integration-service.wolt.com",
+      "description": "Production"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/venues/{venueId}/delivery-provider": {
+      "get": {
+        "operationId": "get-venue-delivery-provider",
+        "summary": "Retrieve current delivery provider",
+        "description": "Returns the currently defined delivery provider for a venue on the Wolt marketplace.\n\nThe returned value can be one of the following:\n\n- `WOLT` - venue delivers orders using Wolt's courier fleet.\n- `SELF_DELIVERY` - venue delivers orders using its own couriers.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "delivery_provider": {
+                      "description": "The current active delivery provider for this venue.",
+                      "type": "string",
+                      "enum": [
+                        "WOLT",
+                        "SELF_DELIVERY"
+                      ]
+                    }
+                  },
+                  "title": "GetActiveDeliveryProviderResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not authorized to access this venue"
+          },
+          "404": {
+            "description": "Venue not found"
+          },
+          "500": {
+            "description": "An internal error occurred"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "update-venue-delivery-provider",
+        "summary": "Change delivery provider",
+        "description": "Changes the currently defined delivery provider for a venue on the Wolt marketplace.\n\nCan be performed successfully only if the venue has hybrid delivery functionality enabled.\n\n_Important to note - any existing purchases will not be impacted by this change. The delivery provider for a purchase is set and finalized when an order is created by the user._\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Could not change delivery provider due to validation failure."
+          },
+          "403": {
+            "description": "Not authorized to access this venue"
+          },
+          "500": {
+            "description": "An internal error occurred"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Change delivery provider request payload.",
+                "type": "object",
+                "properties": {
+                  "delivery_provider": {
+                    "description": "New delivery provider that should be used by the venue",
+                    "type": "string",
+                    "enum": [
+                      "WOLT",
+                      "SELF_DELIVERY"
+                    ]
+                  }
+                },
+                "required": [
+                  "delivery_provider"
+                ],
+                "title": "ChangeDeliveryProviderRequestPayload"
+              }
+            }
+          },
+          "description": "Change delivery provider request payload."
+        }
+      }
+    },
+    "/venues/{venueId}/online": {
+      "patch": {
+        "operationId": "update-venue-online-status",
+        "summary": "Update venue online status",
+        "description": "Update venue's online status\n\nTo schedule the venue to be offline until a certain time, set `status=OFFLINE` and `until` to the desired date and time. Otherwise, the venue will be put offline indefinitely.\n\nScheduling for online status is not supported yet.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Not authorized to access this venue"
+          },
+          "500": {
+            "description": "An internal error occurred"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "description": "The new store status to use.",
+                    "type": "string",
+                    "enum": [
+                      "ONLINE",
+                      "OFFLINE"
+                    ],
+                    "example": "OFFLINE"
+                  },
+                  "until": {
+                    "description": "The date and time (ISO 8601 format) when the venue is to be set offline.\n\nUse `null` or omit the field completely to set venue offline indefinitely.\n",
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "title": "VenueOnlineStatusRequestPayload"
+              }
+            }
+          },
+          "description": "Update venue online status payload."
+        }
+      }
+    },
+    "/venues/{venueId}/opening-times": {
+      "patch": {
+        "operationId": "update-venue-opening-times",
+        "summary": "Update venue opening times",
+        "description": "Update venue's opening times.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Not authorized to access this venue"
+          },
+          "500": {
+            "description": "An internal error occurred"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "availability": {
+                    "description": "Venue's operating hours.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "opening_day": {
+                          "description": "Day of the week when the venue is open.",
+                          "type": "string",
+                          "enum": [
+                            "MONDAY",
+                            "TUESDAY",
+                            "WEDNESDAY",
+                            "THURSDAY",
+                            "FRIDAY",
+                            "SATURDAY",
+                            "SUNDAY"
+                          ],
+                          "example": "TUESDAY"
+                        },
+                        "opening_time": {
+                          "description": "Opening time on the specified day.",
+                          "type": "string",
+                          "example": "10:30"
+                        },
+                        "closing_day": {
+                          "description": "Day of the week when the venue is closed.",
+                          "type": "string",
+                          "enum": [
+                            "MONDAY",
+                            "TUESDAY",
+                            "WEDNESDAY",
+                            "THURSDAY",
+                            "FRIDAY",
+                            "SATURDAY",
+                            "SUNDAY"
+                          ],
+                          "example": "TUESDAY"
+                        },
+                        "closing_time": {
+                          "description": "Closing time on the specified day.",
+                          "type": "string",
+                          "example": "17:30"
+                        }
+                      },
+                      "title": "WeeklyOpeningTimes"
+                    }
+                  }
+                },
+                "title": "OpeningTimesRequestPayload"
+              }
+            }
+          },
+          "description": "Update venue opening times payload."
+        }
+      }
+    },
+    "/venues/{venueId}/settings": {
+      "get": {
+        "operationId": "get-venue-settings",
+        "summary": "Get venue settings",
+        "description": "Retrieve venue settings by ID.\nReturns various settings for a venue, such as open status.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "object",
+                      "properties": {
+                        "is_open": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "is_open"
+                      ],
+                      "title": "VenueStatusSettings"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "title": "VenueSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not authorized to access this venue"
+          },
+          "404": {
+            "description": "Venue not found"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ]
+      }
+    },
+    "/venues/{venueId}/special-opening-times": {
+      "put": {
+        "operationId": "update-venue-special-opening-times",
+        "summary": "Set Venue Special opening times",
+        "description": "Sets the venue’s Special Opening times; These date-defined periods are overrides to your weekly schedule of opening hours. These allow to set opening and closing times in advance for specific events without changing the recurring schedule of your venue. For dates not specified in a request - regular opening hours will be used. Important to note:\n\n- Each request must include the full list of future special opening and closing times. Any times not included in the new request will be removed, and the provided times will replace the previous ones.\n- Dates can appear either in “days_closed” or “days_open” - not in both.\n- Each “daily_availability” must have at least one entry (a pair of “open_time” and “close_time”); to apply more than one opening timeframe per specific entry of dates (or one date) - add each availability period as a pair of “open_time” and “close_time” within the “daily_availability” array. Those entries can’t overlap.\n\nTimes are interpreted in the **venue’s local time zone**.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request — validation failed (e.g., overlaps or bad formats)."
+          },
+          "403": {
+            "description": "Not authorized to access this venue"
+          },
+          "500": {
+            "description": "An internal error occurred"
+          },
+          "503": {
+            "description": "Service unavailable — upstream error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Defines special opening times for a venue.\nEach item in `days_closed` or `days_open` is a **range** that generates a special-times period.\n**No calendar day** may appear in more than one range, and a day cannot be both closed and open.\n",
+                "properties": {
+                  "days_closed": {
+                    "type": "array",
+                    "description": "Fully-closed periods (00:00–24:00 for each day in the range).",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "start_date": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "Start date (inclusive) in venue’s local time-zone.",
+                          "example": "2025-09-09"
+                        },
+                        "end_date": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "End date (inclusive) in venue’s local time-zone.",
+                          "example": "2025-09-11"
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "Optional note.",
+                          "example": "Maintenance window"
+                        }
+                      },
+                      "required": [
+                        "start_date",
+                        "end_date"
+                      ],
+                      "title": "ClosedRange"
+                    }
+                  },
+                  "days_open": {
+                    "type": "array",
+                    "description": "Open periods with per-day windows; provide the full daily schedule in `daily_availability`.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "start_date": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "Start date (inclusive) in venue’s local time-zone.",
+                          "example": "2025-09-07"
+                        },
+                        "end_date": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "End date (inclusive) in venue’s local time-zone.",
+                          "example": "2025-09-08"
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "Optional note.",
+                          "example": "Lunch only"
+                        },
+                        "daily_availability": {
+                          "type": "array",
+                          "description": "**Full** per-day schedule as non-overlapping windows.\n- `open_time` must be **<** `close_time`\n- `open_time` **cannot** be `24:00`\n- `close_time` **may** be `24:00`\n",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "open_time": {
+                                "type": "string",
+                                "description": "Start time (24h, `HH:mm`). Must be < `close_time`. Cannot be `24:00`.",
+                                "example": "11:30"
+                              },
+                              "close_time": {
+                                "type": "string",
+                                "description": "End time (24h, `HH:mm`). May be `24:00` to indicate end-of-day.",
+                                "example": "16:00"
+                              }
+                            },
+                            "required": [
+                              "open_time",
+                              "close_time"
+                            ],
+                            "title": "AvailabilityWindow"
+                          }
+                        }
+                      },
+                      "required": [
+                        "start_date",
+                        "end_date",
+                        "daily_availability"
+                      ],
+                      "title": "OpenRange"
+                    }
+                  }
+                },
+                "title": "SpecialTimesPayload"
+              }
+            }
+          },
+          "description": "Special opening times payload."
+        }
+      }
+    },
+    "/venues/{venueId}/status": {
+      "get": {
+        "operationId": "get-venue-status",
+        "summary": "Get venue status",
+        "description": "Retrieve venue status by ID.\n\nReturns various key status metrics for a venue, such as offline status, delivery radius and integration status.\n\nThe metrics also include status of the latest 3 orders - if the latest 3 orders are rejected, you can view it as a red flag and take remedial action.\n",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "description": "Get venue status response example.",
+                    "value": {
+                      "external_venue_id": "STORE-123",
+                      "status": {
+                        "is_open": true,
+                        "is_online": true,
+                        "is_ipad_free": true
+                      },
+                      "contact_details": {
+                        "address": "Iso Roobertinkatu 29",
+                        "phone": "+3580406658664"
+                      },
+                      "opening_times": [
+                        {
+                          "opening_day": "MONDAY",
+                          "opening_time": "00:00",
+                          "closing_day": "SUNDAY",
+                          "closing_time": "24:00"
+                        }
+                      ],
+                      "special_times": [],
+                      "delivery_area": [
+                        {
+                          "lat": 60.17734425244339,
+                          "lng": 24.917020270161032
+                        },
+                        {
+                          "lat": 60.18264159449447,
+                          "lng": 24.946073088071387
+                        },
+                        {
+                          "lat": 60.18649367021024,
+                          "lng": 24.954304719812797
+                        },
+                        {
+                          "lat": 60.179993030281196,
+                          "lng": 24.97730486732482
+                        },
+                        {
+                          "lat": 60.171082655559786,
+                          "lng": 24.982873324091287
+                        },
+                        {
+                          "lat": 60.159158238649525,
+                          "lng": 24.973915371901455
+                        },
+                        {
+                          "lat": 60.15349563690458,
+                          "lng": 24.932272999563537
+                        },
+                        {
+                          "lat": 60.15807398616596,
+                          "lng": 24.91556762926527
+                        },
+                        {
+                          "lat": 60.17264816668299,
+                          "lng": 24.911451813394592
+                        },
+                        {
+                          "lat": 60.17734425244339,
+                          "lng": 24.917020270161032
+                        }
+                      ],
+                      "venue_config": {
+                        "order_api_enabled": true,
+                        "menu_api_enabled": true,
+                        "prep_time_duration": 600,
+                        "max_acceptance_prep_time_duration": null,
+                        "rate_limit_settings": {
+                          "itemsUpdate": {
+                            "refresh_rate_in_minutes": 1,
+                            "limit": 120
+                          },
+                          "getMenu": {
+                            "refresh_rate_in_minutes": 1,
+                            "limit": 999
+                          }
+                        }
+                      },
+                      "last_three_orders_status": [
+                        "PRODUCTION",
+                        "REJECTED"
+                      ],
+                      "order_handling_configuration": {
+                        "acceptance_by_wolt": true,
+                        "using_courier_arrival_notification": true
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "external_venue_id": "STORE-123",
+                  "status": {
+                    "is_open": true,
+                    "is_online": true,
+                    "is_ipad_free": true
+                  },
+                  "contact_details": {
+                    "address": "Iso Roobertinkatu 29",
+                    "phone": "+3580406658664"
+                  },
+                  "opening_times": [
+                    {
+                      "opening_day": "MONDAY",
+                      "opening_time": "00:00",
+                      "closing_day": "SUNDAY",
+                      "closing_time": "24:00"
+                    }
+                  ],
+                  "special_times": [],
+                  "delivery_area": [
+                    {
+                      "lat": 60.17734425244339,
+                      "lng": 24.917020270161032
+                    },
+                    {
+                      "lat": 60.18264159449447,
+                      "lng": 24.946073088071387
+                    },
+                    {
+                      "lat": 60.18649367021024,
+                      "lng": 24.954304719812797
+                    },
+                    {
+                      "lat": 60.179993030281196,
+                      "lng": 24.97730486732482
+                    },
+                    {
+                      "lat": 60.171082655559786,
+                      "lng": 24.982873324091287
+                    },
+                    {
+                      "lat": 60.159158238649525,
+                      "lng": 24.973915371901455
+                    },
+                    {
+                      "lat": 60.15349563690458,
+                      "lng": 24.932272999563537
+                    },
+                    {
+                      "lat": 60.15807398616596,
+                      "lng": 24.91556762926527
+                    },
+                    {
+                      "lat": 60.17264816668299,
+                      "lng": 24.911451813394592
+                    },
+                    {
+                      "lat": 60.17734425244339,
+                      "lng": 24.917020270161032
+                    }
+                  ],
+                  "venue_config": {
+                    "order_api_enabled": true,
+                    "menu_api_enabled": true,
+                    "prep_time_duration": 600,
+                    "max_acceptance_prep_time_duration": null,
+                    "rate_limit_settings": {
+                      "itemsUpdate": {
+                        "refresh_rate_in_minutes": 1,
+                        "limit": 120
+                      },
+                      "getMenu": {
+                        "refresh_rate_in_minutes": 1,
+                        "limit": 999
+                      }
+                    }
+                  },
+                  "last_three_orders_status": [
+                    "PRODUCTION",
+                    "REJECTED"
+                  ],
+                  "order_handling_configuration": {
+                    "acceptance_by_wolt": true,
+                    "using_courier_arrival_notification": true
+                  }
+                },
+                "schema": {
+                  "title": "Venue status",
+                  "description": "Venue object describes various key status metrics of a venue, such as offline status, delivery radius and integration status.",
+                  "type": "object",
+                  "properties": {
+                    "external_venue_id": {
+                      "description": "The external identifier for the venue provided by the merchant.",
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "status": {
+                      "type": "object",
+                      "properties": {
+                        "is_open": {
+                          "description": "The open status of the venue.",
+                          "type": "boolean"
+                        },
+                        "is_online": {
+                          "description": "The online status of the venue.",
+                          "type": "boolean"
+                        },
+                        "is_ipad_free": {
+                          "description": "The iPad dependency status of the venue. Fully integrated restaurant venues can operate without the Wolt Merchant app.",
+                          "type": "boolean"
+                        }
+                      },
+                      "title": "VenueStatus"
+                    },
+                    "contact_details": {
+                      "description": "Contact details for the venue.",
+                      "type": "object",
+                      "properties": {
+                        "address": {
+                          "description": "The address of the venue.",
+                          "type": "string"
+                        },
+                        "phone": {
+                          "description": "The phone number of the venue.",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "opening_times": {
+                      "description": "Opening hours of the venue.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "opening_day": {
+                            "description": "Day of the week when the venue is open.",
+                            "type": "string",
+                            "enum": [
+                              "MONDAY",
+                              "TUESDAY",
+                              "WEDNESDAY",
+                              "THURSDAY",
+                              "FRIDAY",
+                              "SATURDAY",
+                              "SUNDAY"
+                            ]
+                          },
+                          "opening_time": {
+                            "description": "Opening time on the specified day.",
+                            "type": "string"
+                          },
+                          "closing_day": {
+                            "description": "Day of the week when the venue is closed.",
+                            "type": "string",
+                            "enum": [
+                              "MONDAY",
+                              "TUESDAY",
+                              "WEDNESDAY",
+                              "THURSDAY",
+                              "FRIDAY",
+                              "SATURDAY",
+                              "SUNDAY"
+                            ]
+                          },
+                          "closing_time": {
+                            "description": "Closing time on the specified day.",
+                            "type": "string"
+                          }
+                        },
+                        "title": "WeeklyOpeningTimes"
+                      }
+                    },
+                    "special_times": {
+                      "description": "Special hours of the venue.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "opening_date": {
+                            "description": "Calendar date (venue’s local time-zone) on which the\nspecial opening schedule starts.\n",
+                            "type": "string",
+                            "format": "date",
+                            "example": "2025-08-24"
+                          },
+                          "opening_time": {
+                            "description": "Time (24-hour clock, HH:mm) on **opening_date** when the venue opens.\nUse `00:00` to indicate “start of day”.\n",
+                            "type": "string",
+                            "example": "00:00"
+                          },
+                          "closing_date": {
+                            "description": "Calendar date on which the special schedule ends.\n",
+                            "type": "string",
+                            "format": "date",
+                            "example": "2025-08-24"
+                          },
+                          "closing_time": {
+                            "description": "Time (24-hour clock, HH:mm) on **closing_date** when the venue closes.\n`24:00` signifies “end of day”.\n",
+                            "type": "string",
+                            "example": "24:00"
+                          }
+                        },
+                        "title": "SpecialOpeningTimes"
+                      }
+                    },
+                    "delivery_area": {
+                      "description": "Delivery polygon coordinates of the venue.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "description": "Latitude of the delivery zone polygon.",
+                            "type": "number",
+                            "format": "double"
+                          },
+                          "lng": {
+                            "description": "Longitude of the delivery zone polygon.",
+                            "type": "number",
+                            "format": "double"
+                          }
+                        },
+                        "title": "DeliveryAreaCoordinates"
+                      }
+                    },
+                    "venue_config": {
+                      "description": "Integration configuration of the venue.",
+                      "type": "object",
+                      "properties": {
+                        "order_api_enabled": {
+                          "description": "Indicates if Order API is enabled for the venue.",
+                          "type": "boolean"
+                        },
+                        "menu_api_enabled": {
+                          "description": "Indicates if Menu API is enabled for the venue.",
+                          "type": "boolean"
+                        },
+                        "prep_time_duration": {
+                          "description": "The manually set estimated preparation time for the venue.\n\nWhen using auto-accept, we prioritize the longer of two times: the preparation time you've set or the courier's expected arrival time. This way we ensure the venue has ample time to prepare the food even if we don't receive any adjusted preparation time during the auto-accept process.\n",
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "max_acceptance_prep_time_duration": {
+                          "description": "The max adjustable prep time for a venue, set manually by the account manager at Wolt.\n",
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "rate_limit_settings": {
+                          "description": "Rate limits of the various endpoints that are rate-limited.",
+                          "type": "object",
+                          "properties": {
+                            "itemsUpdate": {
+                              "description": "Rate limit settings for the item update endpoint.",
+                              "type": "object",
+                              "properties": {
+                                "refresh_rate_in_minutes": {
+                                  "description": "The rate limit unit in minutes.\n",
+                                  "type": "integer"
+                                },
+                                "limit": {
+                                  "description": "The number of times the endpoint can be called per `refresh_rate_in_minutes`.\n",
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "getMenu": {
+                              "description": "Rate limit settings for the get menu endpoint.",
+                              "type": "object",
+                              "properties": {
+                                "refresh_rate_in_minutes": {
+                                  "description": "The rate limit unit in minutes.\n",
+                                  "type": "integer"
+                                },
+                                "limit": {
+                                  "description": "The number of times the endpoint can be called per `refresh_rate_in_minutes`.\n",
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "inventoryUpdate": {
+                              "description": "Rate limit settings for the inventory update endpoint.",
+                              "type": "object",
+                              "properties": {
+                                "refresh_rate_in_minutes": {
+                                  "description": "The rate limit unit in minutes.\n",
+                                  "type": "integer"
+                                },
+                                "limit": {
+                                  "description": "The number of times the endpoint can be called per `refresh_rate_in_minutes`.\n",
+                                  "type": "integer"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "geo_fencing_status": {
+                          "description": "Indicated if courier estimated time of arrival (ETA) is used.",
+                          "type": "boolean",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "last_three_orders_status": {
+                      "description": "Status of the last three orders of the venue.",
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "description": "Status of the order.",
+                        "enum": [
+                          "RECEIVED",
+                          "FETCHED",
+                          "ACKNOWLEDGED",
+                          "PRODUCTION",
+                          "READY",
+                          "DELIVERED",
+                          "REJECTED",
+                          "DEFERRED_PAYMENT_FAILED",
+                          "OTHER"
+                        ]
+                      }
+                    },
+                    "order_handling_configuration": {
+                      "description": "Venue-specific configuration related to order acceptance, preparation delays etc.",
+                      "type": "object",
+                      "properties": {
+                        "acceptance_by_wolt": {
+                          "description": "Indicates whether the venue uses Wolt's auto-accept feature.\n\nWhen `true`, orders are automatically accepted by Wolt systems without requiring manual acceptance by the venue.\n",
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "using_courier_arrival_notification": {
+                          "description": "Indicates whether the venue is subscribed to receive courier arrival notifications.\n\nWhen `true`, the venue receives notifications when the courier is approaching or has arrived at the venue for pickup.\n",
+                          "type": "boolean",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Not authorized to access this venue"
+          },
+          "404": {
+            "description": "Venue not found"
+          },
+          "500": {
+            "description": "An internal error occurred"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "602fb85a64983ea30328f131"
+            },
+            "description": "Unique identifier for the venue."
+          }
+        ]
+      }
+    }
+  }
+}

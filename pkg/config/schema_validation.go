@@ -373,6 +373,12 @@ func validateResponseTransform(rt *ResponseTransform, path string, result *Schem
 			result.AddError(path+".delete.status", fmt.Sprintf("invalid HTTP status code %d", rt.Delete.Status))
 		}
 	}
+
+	if rt.Custom != nil && rt.Custom.Status != 0 {
+		if rt.Custom.Status < 100 || rt.Custom.Status > 599 {
+			result.AddError(path+".custom.status", fmt.Sprintf("invalid HTTP status code %d", rt.Custom.Status))
+		}
+	}
 }
 
 // ValidatePortConflicts checks for port conflicts between services.

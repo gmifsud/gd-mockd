@@ -241,6 +241,27 @@ jobs:
           [ "$REMAINING" -eq 0 ] || (echo "Expected 0 mocks after deletion, got $REMAINING" && exit 1)
           echo "✓ List and delete work"
 
+  wolt-twin:
+    name: Wolt digital twin (examples/wolt)
+    runs-on: ubuntu-latest
+    needs: [test]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          cache: true
+
+      - name: Build binary
+        run: go build -ldflags="-s -w" -o mockd ./cmd/mockd
+
+      - name: Run end-to-end suite
+        run: MOCKD_BIN=$PWD/mockd python3 examples/wolt/tests/test_wolt_twin.py
+
   action-compat:
     name: Setup Action Compat
     runs-on: ubuntu-latest

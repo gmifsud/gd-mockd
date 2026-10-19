@@ -263,7 +263,7 @@ If the client has a `clientSecret` configured, it must still be provided. PKCE i
 
 ### Refresh Token
 
-Exchange a refresh token for a new access token. The original refresh token is returned (not rotated).
+Exchange a refresh token for a new access token. By default the original refresh token is returned (not rotated); set `rotateRefreshTokens: true` to make refresh tokens single-use, so each refresh returns a new one and replaying the old one fails with `invalid_grant`.
 
 ```bash
 curl -X POST http://localhost:4280/token \
@@ -405,6 +405,7 @@ mocks:
 | `issuer` | string | `https://mock-oauth.local` | Issuer URL for JWT `iss` claim and discovery endpoints |
 | `tokenExpiry` | string | `"1h"` | Access token lifetime (Go duration or `Nd` for days) |
 | `refreshExpiry` | string | `"7d"` | Refresh token lifetime |
+| `rotateRefreshTokens` | boolean | `false` | Single-use refresh tokens: each `refresh_token` grant invalidates the presented token and returns a new one (reuse fails with `invalid_grant`) |
 | `defaultScopes` | string[] | `["openid", "profile", "email"]` | Allowed scopes — requests for unlisted scopes are rejected |
 | `defaultClaims` | map | `{}` | Claims added to every access token |
 | `clients` | ClientConfig[] | | OAuth client definitions |

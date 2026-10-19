@@ -13,6 +13,9 @@ type OAuthConfig struct {
 	Clients       []ClientConfig         `json:"clients" yaml:"clients"`
 	Users         []UserConfig           `json:"users" yaml:"users"`
 	Enabled       bool                   `json:"enabled" yaml:"enabled"`
+	// RotateRefreshTokens makes refresh tokens single-use: each refresh_token
+	// grant invalidates the presented token and returns a new one.
+	RotateRefreshTokens bool `json:"rotateRefreshTokens,omitempty" yaml:"rotateRefreshTokens,omitempty"`
 }
 
 // ClientConfig defines an OAuth client configuration
