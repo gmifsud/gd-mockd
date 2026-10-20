@@ -2,21 +2,21 @@
 type: prd
 project: gd-mockd
 feature: Trustworthy Wolt simulator for one price-and-stock synchronisation flow
-status: increment-a-implemented
+status: increment-b-implemented-awaiting-wsl-verification
 approval_status: approved
 approved: 2026-10-19
-approved_decisions: [D1, D2, D3, D4, D5, D6]
+approved_decisions: [D1, D2, D3, D4, D5, D6, D7]
 implementation_authorised: true
 owner: Gregory Mifsud
 created: 2026-10-19
-updated: 2026-10-19
-version: "0.1"
+updated: 2026-10-20
+version: "0.2"
 repository: D:/Repos/Tools/gd-mockd
 branch: claude/adoring-davinci-t3a2gd
-head_commit: 0cb456d
+head_commit: 75eafdf
 consumer: D:/Repos/Integration (docs/wolt-simulator-fidelity-reference.md)
 increments: [A-authentication, B-catalogue-effects, C-engine-acceptance, D-real-source]
-current_increment: B (blocked on D7)
+current_increment: B (implementation complete; Go and E2E execution pending)
 tags: [prd, mockd, wolt, oauth, simulator, contract-matrix]
 ---
 
@@ -252,6 +252,9 @@ mockd start -c examples/wolt/mockd.yaml --no-auth && pytest examples/wolt/tests 
 
 ## 7. Increments B–D (outline only)
 
+Increment B is now approved and implemented as described in `INCREMENT-B-HANDOFF.md`.
+The historical outline below records the alternatives considered; D7 is no longer open.
+
 - **B: Catalogue effects.** Per-venue catalogue documents with explicit identifier maps, seeded with a leading-zero SKU and the same SKU in both venues. F9 needs a decision first. Either (i) add a generic, atomic `patchElements` step: match array elements by key, apply listed fields, all-or-nothing under the document lock; or (ii) rebuild the array in an expr `set` step plus a single `update`. That is not atomic across concurrent requests. **Recommend (i).** (ii) loses updates under the concurrency that C exercises.
 - **C: Engine acceptance.** Replace `MockdScenario.TokenMocks()` and `MockdJwt` (unsigned `alg=none`) in Integration with the twin's real OAuth provider. Delivery mocks give way to the guarded, stateful endpoints. Fault injection **after mutation** (response-lost) needs a new mockd hook; `delay` and `chaos` act before processing and cannot prove "applied, response lost". Two owners, two venues, restart before dispatch, run 3× against the marked database.
 - **D: Real source.** Swap only the source for Panama's read path, which stays read-only.
@@ -278,6 +281,11 @@ mockd start -c examples/wolt/mockd.yaml --no-auth && pytest examples/wolt/tests 
 | D5 | G4 = 403 as Simulation policy, pending L4 capture | Accept |
 | D6 | Include F8 (wrong client does not burn a code); 3-line reorder | Accept |
 | D7 | B policies I4 (ignore and journal), I5 (atomic reject), I6 (synchronous); B approach (i) `patchElements` | Accept (binds B's PRD) |
+
+D7 was explicitly approved in chat: "agreed .. approved". Implementation uses a resource lock
+around a copy-and-publish update of one document. It does not promise multi-table transactions.
+Accepted/unmatched batch details are in `menu_events`; rejected request evidence is in the
+existing HTTP request journal, with no accepted-event entry or catalogue mutation.
 
 No execution code until D1–D6 are approved.
 

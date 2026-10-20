@@ -660,7 +660,19 @@
             "type": "object",
             "required": ["type"],
             "properties": {
-              "type": { "type": "string", "enum": ["read", "update", "delete", "create", "set", "list", "validate"] },
+              "type": { "type": "string", "enum": ["read", "update", "delete", "create", "set", "list", "validate", "patchElements"] },
+              "patchElements": {
+                "type": "object",
+                "required": ["paths", "match", "fields"],
+                "additionalProperties": false,
+                "properties": {
+                  "paths": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+                  "match": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string", "minLength": 1 } },
+                  "fields": { "type": "object", "minProperties": 1, "additionalProperties": { "enum": ["integer", "number", "boolean", "string"] } },
+                  "required": { "type": "array", "items": { "type": "string" } },
+                  "requires": { "type": "object", "additionalProperties": { "type": "string" } }
+                }
+              },
               "resource": { "type": "string" },
               "id": { "type": "string", "description": "Item ID (supports expressions)" },
               "as": { "type": "string", "description": "Variable name to store result" },

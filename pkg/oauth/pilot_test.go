@@ -206,6 +206,53 @@ func TestAuthorizeClaims_InvalidConfigRejected(t *testing.T) {
 	}
 }
 
+func TestRotate_ExpiryCheckedAtSnapshotAndCommit(t *testing.T) {
+	for _, duringMint := range []bool{false, true} {
+		for _, offset := range []time.Duration{0, time.Nanosecond} {
+			name := "snapshot"
+			if duringMint {
+				name = "commit"
+			}
+			t.Run(name+"/"+offset.String(), func(t *testing.T) {
+				p, h := newPilot(t, func(c *OAuthConfig) {
+					c.TokenExpiry = "2h"
+					c.RefreshExpiry = "1h"
+				})
+				start := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+				p.SetClock(func() time.Time { return start })
+				initial := onboard(t, h, "venue-a")
+				presented := str(t, initial, "refresh_token")
+				expiredAt := start.Add(time.Hour + offset)
+				if !duringMint {
+					p.SetClock(func() time.Time { return expiredAt })
+				}
+				minted := false
+				result, err := p.RotateRefreshToken(presented, pilotClient, func(data RefreshTokenData) (string, error) {
+					minted = true
+					token, mintErr := p.GenerateToken(accessClaims(data.Claims, data.UserID, data.ClientID, data.Scope))
+					p.SetClock(func() time.Time { return expiredAt })
+					return token, mintErr
+				})
+				if err == nil || result != nil {
+					t.Fatal("expired refresh token must not publish replacement credentials")
+				}
+				if minted != duringMint {
+					t.Fatalf("mint invoked = %v, want %v", minted, duringMint)
+				}
+				p.refreshTokensMu.RLock()
+				count := len(p.refreshTokens)
+				p.refreshTokensMu.RUnlock()
+				if count != 0 {
+					t.Fatalf("expired rotation left %d refresh tokens; want none", count)
+				}
+				if _, err := p.ValidateToken(str(t, initial, "access_token")); err != nil {
+					t.Fatalf("failed rotation must not revoke the still-valid original access token: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestRefresh_PreservesBoundClaims(t *testing.T) {
 	p, h := newPilot(t, nil)
 	first := onboard(t, h, "venue-a")

@@ -543,6 +543,7 @@ type CustomOperationConfig struct {
 
 // CustomStepConfig defines a single step in a custom operation pipeline.
 type CustomStepConfig struct {
+	PatchElements *PatchElementsConfig `json:"patchElements,omitempty" yaml:"patchElements,omitempty"`
 	// Type is the step kind: "read", "update", "delete", "create", "set", "list", "validate"
 	Type string `json:"type" yaml:"type"`
 	// Resource is the stateful resource name (for read/update/delete/create/list)

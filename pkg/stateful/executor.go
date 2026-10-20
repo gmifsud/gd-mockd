@@ -13,6 +13,7 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
+	"github.com/getmockd/mockd/pkg/config"
 	"github.com/getmockd/mockd/pkg/tracing"
 )
 
@@ -68,10 +69,12 @@ const (
 	StepList StepType = "list"
 	// StepValidate evaluates a boolean condition and halts the operation with an error if false.
 	StepValidate StepType = "validate"
+	StepPatchElements StepType = "patchElements"
 )
 
 // Step is a single step in a custom operation pipeline.
 type Step struct {
+	PatchElements *config.PatchElementsConfig `json:"patchElements,omitempty" yaml:"patchElements,omitempty"`
 	// Type is the kind of step (read, update, delete, create, set).
 	Type StepType `json:"type" yaml:"type"`
 
@@ -160,7 +163,7 @@ func (e *OperationExecutor) Execute(ctx context.Context, op *CustomOperation, re
 		}
 	}
 
-	consistency, err := normalizeConsistencyMode(op.Consistency)
+	consistency, err := CustomOperationConsistency(op)
 	if err != nil {
 		return &OperationResult{
 			Status: StatusValidationError,
@@ -294,6 +297,8 @@ func (e *OperationExecutor) executeStep(ctx context.Context, stepIndex int, step
 		err = e.stepList(step, exprCtx, workspaceID)
 	case StepValidate:
 		err = e.stepValidate(step, exprCtx)
+	case StepPatchElements:
+		err = e.stepPatchElements(step, exprCtx, workspaceID)
 	default:
 		err = fmt.Errorf("unknown step type: %s", step.Type)
 	}
@@ -675,7 +680,7 @@ func NormalizeCustomOperation(op *CustomOperation) (ConsistencyMode, error) {
 	if op == nil {
 		return "", errors.New("custom operation must not be nil")
 	}
-	mode, err := normalizeConsistencyMode(op.Consistency)
+	mode, err := CustomOperationConsistency(op)
 	if err != nil {
 		return "", err
 	}
@@ -688,7 +693,24 @@ func CustomOperationConsistency(op *CustomOperation) (ConsistencyMode, error) {
 	if op == nil {
 		return "", errors.New("custom operation must not be nil")
 	}
-	return normalizeConsistencyMode(op.Consistency)
+	mode, err := normalizeConsistencyMode(op.Consistency)
+	if err != nil {
+		return "", err
+	}
+	for _, step := range op.Steps {
+		if step.Type == StepPatchElements {
+			if mode == ConsistencyAtomic {
+				return "", errors.New("patchElements cannot use operation rollback; its document commit is independently atomic")
+			}
+			if step.Resource == "" || step.ID == "" || step.Value == "" || step.As == "" {
+				return "", errors.New("patchElements requires resource, id, value and as")
+			}
+			if err := step.PatchElements.Validate(); err != nil {
+				return "", err
+			}
+		}
+	}
+	return mode, nil
 }
 
 type rollbackJournal struct {

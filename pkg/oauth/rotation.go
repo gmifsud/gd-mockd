@@ -73,7 +73,7 @@ func (p *Provider) RotateRefreshToken(presented, clientID string, mint RotationM
 		p.refreshTokensMu.Unlock()
 		return nil, errRefreshTokenInvalid
 	}
-	if p.Now().After(snapshot.ExpiresAt) {
+	if !p.Now().Before(snapshot.ExpiresAt) {
 		delete(p.refreshTokens, presented)
 		p.refreshTokensMu.Unlock()
 		return nil, errors.New("refresh token has expired")
@@ -102,6 +102,11 @@ func (p *Provider) RotateRefreshToken(presented, clientID string, mint RotationM
 		// Lost the race to a concurrent rotation of the same token.
 		p.handleReuseLocked(presented, clientID)
 		return nil, errRefreshTokenInvalid
+	}
+	// Minting runs outside the lock: validity must still hold at commit.
+	if !p.Now().Before(snapshot.ExpiresAt) {
+		delete(p.refreshTokens, presented)
+		return nil, errors.New("refresh token has expired")
 	}
 	delete(p.refreshTokens, presented)
 	if p.config.RefreshTokenReuseDetection {

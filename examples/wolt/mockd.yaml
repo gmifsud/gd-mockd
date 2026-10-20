@@ -425,6 +425,9 @@ tables:
               name: [{ lang: en, value: Burgers }]
               items:
                 - external_data: { external_id: SUPERHAMBURG }
+                  merchant_sku: burger
+                  gtin_barcode: "05000000000001"
+                  inventory: 10
                   name: [{ lang: en, value: Super Hamburger }]
                   price: 2290
                   vat_percentage: 14
@@ -433,6 +436,9 @@ tables:
               name: [{ lang: en, value: Drinks }]
               items:
                 - external_data: { external_id: "123" }
+                  merchant_sku: "000123"
+                  gtin_barcode: "05000000000002"
+                  inventory: 20
                   name: [{ lang: en, value: Coca-Cola 0.33 l }]
                   price: 225
                   vat_percentage: 14
@@ -447,6 +453,9 @@ tables:
               name: [{ lang: en, value: Drinks }]
               items:
                 - external_data: { external_id: "123" }
+                  merchant_sku: "000123"
+                  gtin_barcode: "05000000000002"
+                  inventory: 30
                   name: [{ lang: en, value: Coca-Cola 0.33 l }]
                   price: 250
                   vat_percentage: 14
@@ -984,41 +993,39 @@ customOperations:
   # PATCH /venues/{venueId}/items  {data: [{external_id|gtin|sku, price?, enabled?, in_stock?, ...}]}
   - name: UpdateMenuItems
     steps:
-      - { type: read, resource: menus, id: input.venueId, as: m }
-      - type: validate
-        condition: "input.data != nil && len(input.data) > 0"
-        errorMessage: "data must be a non-empty array"
-        errorStatus: 400
-      - type: validate
-        condition: "all(input.data, {(#.external_id != nil ? 1 : 0) + (#.gtin != nil ? 1 : 0) + (#.sku != nil ? 1 : 0) == 1})"
-        errorMessage: "Each item must be identified by exactly one of external_id, gtin or sku"
-        errorStatus: 400
+      - type: patchElements
+        resource: menus
+        id: input.venueId
+        value: input.data
+        as: applied
+        patchElements:
+          paths: &catalogue-paths [menu.items, 'menu.categories.*.items', 'menu.categories.*.subcategories.*.items']
+          match: &catalogue-identifiers { external_id: external_data.external_id, gtin: gtin_barcode, sku: merchant_sku }
+          fields: { price: integer, discounted_price: integer, vat_percentage: number, enabled: boolean }
+          requires: { discounted_price: price }
       - *ts
       - type: create
         resource: menu_events
-        set: { venue_id: input.venueId, action: '"items"', at: ts, payload: input }
+        set: { venue_id: input.venueId, action: '"items"', at: ts, payload: input, outcome: '"accepted"', matched: applied.matched, unmatched: applied.unmatched, results: applied.results }
     response: { id: input.venueId }
 
   # PATCH /venues/{venueId}/items/inventory  {data: [{external_id|gtin|sku, inventory}]}
   - name: UpdateMenuInventory
     steps:
-      - { type: read, resource: menus, id: input.venueId, as: m }
-      - type: validate
-        condition: "input.data != nil && len(input.data) > 0"
-        errorMessage: "data must be a non-empty array"
-        errorStatus: 400
-      - type: validate
-        condition: "all(input.data, {(#.external_id != nil ? 1 : 0) + (#.gtin != nil ? 1 : 0) + (#.sku != nil ? 1 : 0) == 1})"
-        errorMessage: "Each item must be identified by exactly one of external_id, gtin or sku"
-        errorStatus: 400
-      - type: validate
-        condition: "all(input.data, {#.inventory != nil})"
-        errorMessage: "inventory is required (null is not accepted)"
-        errorStatus: 400
+      - type: patchElements
+        resource: menus
+        id: input.venueId
+        value: input.data
+        as: applied
+        patchElements:
+          paths: *catalogue-paths
+          match: *catalogue-identifiers
+          fields: { inventory: integer }
+          required: [inventory]
       - *ts
       - type: create
         resource: menu_events
-        set: { venue_id: input.venueId, action: '"inventory"', at: ts, payload: input }
+        set: { venue_id: input.venueId, action: '"inventory"', at: ts, payload: input, outcome: '"accepted"', matched: applied.matched, unmatched: applied.unmatched, results: applied.results }
     response: { id: input.venueId }
 
   # PATCH /venues/{venueId}/options/values  {data: [{external_id, price?, enabled?, ...}]}

@@ -165,7 +165,11 @@ WOLT-SIGNATURE: <hex HMAC-SHA256 of the raw body with the client secret>
 | `PUT /venues/{venueId}/special-opening-times` | Recorded; 202 + `OPENING_HOURS_UPDATED` webhook |
 | `GET /venues/{venueId}/settings`, `GET`/`PATCH …/delivery-provider` | Read and switch `WOLT` ↔ `SELF_DELIVERY` |
 
-Menu and inventory updates are recorded in the `menu_events` table (`GET http://localhost:4290/state/resources/menu_events/items`) so tests can assert what was sent.
+Menu price and inventory updates now change the stored menu and are recorded in `menu_events`
+(`GET http://localhost:4290/state/resources/menu_events/items`). Each accepted event includes
+`matched`, `unmatched`, and per-input `results`; unknown identifiers do not create items.
+Rejected batches leave the catalogue unchanged and remain visible in the HTTP request journal.
+See [Increment B handoff](INCREMENT-B-HANDOFF.md) for the bounded field support and WSL checks.
 
 ## Wolt Drive
 
@@ -225,7 +229,10 @@ go build -o mockd ./cmd/mockd
 MOCKD_BIN=$PWD/mockd python3 examples/wolt/tests/test_wolt_twin.py
 ```
 
-18 end-to-end scenarios (OAuth incl. venue binding, revocation, reuse and concurrent refresh; guarded menu updates across two venues; every order flow, webhooks with signature verification, Order Submitter, venue, menu, Drive with JWT verification, audit). CI runs them in the `wolt-twin` job.
+23 end-to-end scenarios are defined, including five Increment B catalogue tests (effects,
+unmatched identifiers, atomic rejection, venue isolation and concurrent price/stock updates).
+The existing 18 scenarios cover OAuth, orders, webhooks, menus, venues and Drive. CI runs this
+suite in the `wolt-twin` job. The five new scenarios await execution in the Go-enabled WSL workspace.
 
 ## Where the contract comes from
 
@@ -247,7 +254,7 @@ python3 -I examples/wolt/tools/build_specs.py /tmp/wolt-mcp/specs/wolt-official.
 - One host serves all APIs; Wolt splits them across `integrations-authentication-service`, `pos-integration-service` and `daas-public-api`.
 - Only the Menu item and inventory updates validate bearer tokens against the OAuth provider; other endpoints accept any token except `expired-token`.
 - Venue binding at `/oauth2/authorize?venue_id=` and the 401/403 split on guarded endpoints are twin policy (see `PRD-price-stock-pilot.md` §5).
-- The menu export is `READY` immediately (Wolt may return `PENDING` first). Menu item updates are validated and recorded but not applied to the stored menu; `replace-items` does not change order items.
+- The menu export is `READY` immediately (Wolt may return `PENDING` first). Supported price/stock fields apply synchronously before 202; this is an approved simulation policy. `replace-items` still does not change order items.
 - V1 and V2 fixtures share identity, status and delivery data, but their line items are Wolt's two different reference examples.
 - Rate limits, venue offline alerts during opening hours and rejection alerts are not computed; trigger them with `chaos` and `venue-event`.
 - Wolt's Order Submitter example contains a `"delivery:"` key (sic); the twin sends `delivery`.

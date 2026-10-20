@@ -11,6 +11,7 @@ every flow through the HTTP API and sim/wolt_sim.py.
 """
 
 import base64
+import concurrent.futures
 import hashlib
 import hmac
 import http.server
@@ -465,6 +466,114 @@ class WoltTwinTest(unittest.TestCase):
         self.assertEqual(call("PATCH", f"/venues/{VENUE}/items/inventory", {"data": [{"gtin": "1", "inventory": None}]}, headers=venue)[0], 400)
         self.assertEqual(call("PATCH", f"/venues/{VENUE}/items/inventory", {"data": [{"gtin": "1", "inventory": 3}]}, headers=venue)[0], 202)
         self.assertEqual(call("PATCH", f"/venues/{VENUE}/options/values", {"data": [{"external_id": "TRUF", "enabled": False}]})[0], 202)
+
+    # Increment B: state effects, in addition to accepted request evidence.
+    def catalogue_item(self, venue=VENUE, sku="000123"):
+        status, document = call("GET", f"/state/resources/menus/items/{venue}", base=ADMIN)
+        self.assertEqual(status, 200)
+        menu = document["menu"]
+        items = list(menu.get("items", []))
+        for category in menu.get("categories", []):
+            items.extend(category.get("items", []))
+            for subcategory in category.get("subcategories", []):
+                items.extend(subcategory.get("items", []))
+        return next(item for item in items if item.get("merchant_sku") == sku)
+
+    def test_catalogue_price_inventory_and_identifier_resolution(self):
+        headers = auth(onboard(VENUE))
+        before = self.catalogue_item()
+        status, body = call("PATCH", f"/venues/{VENUE}/items",
+                            {"data": [{"sku": "000123", "price": 990, "discounted_price": 850,
+                                       "vat_percentage": 13.5, "enabled": False}]}, headers=headers)
+        self.assertEqual((status, body), (202, None))
+        item = self.catalogue_item()
+        self.assertEqual(item["inventory"], before["inventory"])
+        self.assertEqual((item["price"], item["discounted_price"], item["vat_percentage"], item["enabled"]),
+                         (990, 850, 13.5, False))
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items/inventory",
+                              {"data": [{"gtin": "05000000000002", "inventory": 0}]}, headers=headers)[0], 202)
+        self.assertEqual((self.catalogue_item()["price"], self.catalogue_item()["inventory"]), (990, 0))
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items",
+                              {"data": [{"external_id": "123", "price": 1000}]}, headers=headers)[0], 202)
+        self.assertEqual(self.catalogue_item()["merchant_sku"], "000123")
+        self.assertEqual(self.catalogue_item()["price"], 1000)
+        events = menu_events()
+        self.assertEqual(len(events), 3)
+        self.assertTrue(all(e["matched"] == 1 and e["unmatched"] == 0 and e["outcome"] == "accepted" for e in events))
+        self.assertEqual([e["action"] for e in events], ["items", "inventory", "items"])
+
+    def test_catalogue_unknown_identifiers_are_journalled(self):
+        headers = auth(onboard(VENUE))
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items",
+                              {"data": [{"sku": "does-not-exist", "price": 1},
+                                        {"sku": "000123", "price": 444}]}, headers=headers)[0], 202)
+        self.assertEqual(self.catalogue_item()["price"], 444)
+        event = menu_events()[-1]
+        self.assertEqual((event["matched"], event["unmatched"]), (1, 1))
+        self.assertEqual(event["results"][0], {"identifier": "sku", "value": "does-not-exist",
+                                              "outcome": "unmatched", "elements": 0})
+        before = self.catalogue_item()
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items",
+                              {"data": [{"sku": "123", "price": 1}]}, headers=headers)[0], 202)
+        self.assertEqual(self.catalogue_item(), before, "numeric-looking SKUs must not be normalized")
+        self.assertEqual(menu_events()[-1]["unmatched"], 1)
+
+    def test_catalogue_invalid_batch_has_no_partial_effect(self):
+        headers = auth(onboard(VENUE))
+        before = self.catalogue_item()
+        cases = [
+            ("items", {"sku": "000123", "price": 2.5}),
+            ("items", {"sku": "000123", "price": True}),
+            ("items", {"sku": 123, "price": 20}),
+            ("items", {"sku": "000123", "discounted_price": 10}),
+            ("items", {"sku": "000123", "enabled": "false"}),
+            ("items/inventory", {"sku": "000123", "inventory": None}),
+            ("items/inventory", {"sku": "000123"}),
+            ("items/inventory", {"sku": "000123", "inventory": 2.5}),
+        ]
+        for path, bad in cases:
+            with self.subTest(path=path, bad=bad):
+                good = {"sku": "000123", "inventory": 99} if path.endswith("inventory") else {"sku": "000123", "price": 999}
+                status, _ = call("PATCH", f"/venues/{VENUE}/{path}", {"data": [good, bad]}, headers=headers)
+                self.assertEqual(status, 400)
+                self.assertEqual(self.catalogue_item(), before)
+        self.assertEqual(menu_events(), [], "no accepted-event rows for rejected batches")
+        # The HTTP request journal remains the evidence for rejection.
+        status, journal = call("GET", "/requests?limit=1000", base=ADMIN)
+        self.assertEqual(status, 200)
+        rejected = [r for r in journal["requests"] if r["method"] == "PATCH" and r["path"].startswith(f"/venues/{VENUE}/items")]
+        self.assertEqual(len(rejected), len(cases))
+
+    def test_catalogue_same_sku_in_two_venues_is_isolated(self):
+        a, b = auth(onboard(VENUE)), auth(onboard(VENUE_B))
+        original_b = self.catalogue_item(VENUE_B)
+        self.assertEqual(call("PATCH", f"/venues/{VENUE}/items",
+                              {"data": [{"sku": "000123", "price": 888}]}, headers=a)[0], 202)
+        self.assertEqual(self.catalogue_item(VENUE_B), original_b)
+        self.assertEqual(call("PATCH", f"/venues/{VENUE_B}/items/inventory",
+                              {"data": [{"sku": "000123", "inventory": 77}]}, headers=b)[0], 202)
+        self.assertEqual(self.catalogue_item()["inventory"], 20)
+        self.assertEqual(self.catalogue_item(VENUE_B)["price"], original_b["price"])
+        self.assertEqual(self.catalogue_item(VENUE_B)["inventory"], 77)
+        self.assertEqual([e["venue_id"] for e in menu_events()], [VENUE, VENUE_B])
+
+    def test_catalogue_concurrent_price_and_inventory_preserve_both(self):
+        headers = auth(onboard(VENUE))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            for i in range(10):
+                barrier = threading.Barrier(2)
+
+                def send(path, field, value):
+                    barrier.wait(timeout=10)
+                    return call("PATCH", f"/venues/{VENUE}/{path}",
+                                {"data": [{"sku": "000123", field: value}]}, headers=headers)[0]
+
+                price = pool.submit(send, "items", "price", 1000 + i)
+                stock = pool.submit(send, "items/inventory", "inventory", i)
+                self.assertEqual((price.result(timeout=15), stock.result(timeout=15)), (202, 202))
+                item = self.catalogue_item()
+                self.assertEqual((item["price"], item["inventory"]), (1000 + i, i))
+        self.assertEqual(len(menu_events()), 20)
 
     # ── Wolt Drive ──
     def test_drive_promise_delivery_webhooks_and_cancel(self):
